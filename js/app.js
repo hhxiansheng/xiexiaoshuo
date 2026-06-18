@@ -859,8 +859,8 @@
     var dialog = document.createElement("div");
     dialog.className = "review-dialog";
     dialog.innerHTML = '<h3 style="margin:0 0 12px">📋 扩展大纲（第' + startCh + '-' + (startCh + count - 1) + '章）</h3>' +
-      '<div class="review-content" id="extendResult" style="min-height:200px;max-height:60vh">正在读取最近章节…</div>' +
-      '<div style="text-align:right;margin-top:12px"><button id="extendClose" class="btn" disabled>关闭</button></div>';
+      '<div class="review-content" id="extendResult" style="min-height:200px">正在读取最近章节…</div>' +
+      '<div class="review-footer"><button id="extendClose" class="btn" disabled>关闭</button></div>';
     overlay.appendChild(dialog);
     document.body.appendChild(overlay);
     var resultBox = dialog.querySelector("#extendResult");
@@ -1026,7 +1026,7 @@
     var fixBtnHTML = hasIssues
       ? '<button id="fixBtn" class="btn btn-primary">🔧 一键修正</button>'
       : '<button id="fixBtn" class="btn" disabled style="opacity:.6;cursor:default">✅ 无需修正</button>';
-    var btnHTML = '<div style="text-align:right;margin-top:16px;display:flex;gap:10px;justify-content:flex-end">' +
+    var btnHTML = '<div class="review-footer">' +
       fixBtnHTML +
       '<button id="closeBtn" class="btn">关闭</button></div>';
 
