@@ -1069,6 +1069,7 @@
     var total = chapterTexts.length;
     var done = 0;
     var fixed = 0;
+    var diffs = [];  // 收集修正前后对比
 
     chapterTexts.reduce(function (chain, ch) {
       return chain.then(function () {
@@ -1082,6 +1083,13 @@
             done++;
             return;
           }
+          // 记录修正前后对比
+          diffs.push({
+            chNo: ch.chNo,
+            title: ch.title,
+            before: ch.text,
+            after: fixedText
+          });
           // 找到原文件名
           var st = NS.store.get();
           var volDir = NS.store.volumeDirForChapter(ch.chNo, st.outline);
@@ -1100,6 +1108,19 @@
       progressBar.style.width = "100%";
       progressText.textContent = "修正完成！共修正 " + fixed + " / " + total + " 章";
       fixBtn.textContent = "✅ 修正完成";
+      // 添加查看修正对比按钮
+      if (diffs.length > 0) {
+        var footer = dialog.querySelector(".review-footer");
+        if (footer) {
+          var diffBtn = document.createElement("button");
+          diffBtn.className = "btn btn-primary";
+          diffBtn.textContent = "📝 查看修正对比（" + diffs.length + " 章）";
+          diffBtn.addEventListener("click", function () {
+            showFixDiff(diffs);
+          });
+          footer.insertBefore(diffBtn, footer.firstChild);
+        }
+      }
       toast("卷内修正完成，修正了 " + fixed + " 章", "");
       // 刷新侧边栏和编辑器
       refreshTree();
@@ -1107,6 +1128,93 @@
       progressText.textContent = "修正中断：" + e.message;
       fixBtn.disabled = false;
       fixBtn.textContent = "🔧 重试修正";
+    });
+  }
+
+  // 显示修正前后对比
+  function showFixDiff(diffs) {
+    var overlay = document.createElement("div");
+    overlay.className = "review-overlay";
+    var dialog = document.createElement("div");
+    dialog.className = "review-dialog diff-dialog";
+
+    var headerHTML = '<h3 style="margin:0 0 12px">📝 修正对比（共 ' + diffs.length + ' 章）</h3>';
+
+    // 章节标签页
+    var tabsHTML = '<div class="diff-tabs">';
+    diffs.forEach(function (d, i) {
+      tabsHTML += '<div class="diff-tab' + (i === 0 ? ' active' : '') + '" data-idx="' + i + '">第' + d.chNo + '章</div>';
+    });
+    tabsHTML += '</div>';
+
+    // 对比内容区
+    var contentHTML = '<div class="diff-body" id="diffBody"></div>';
+
+    var btnHTML = '<div class="review-footer">' +
+      '<button id="diffCloseBtn" class="btn">关闭</button></div>';
+
+    dialog.innerHTML = headerHTML + tabsHTML + contentHTML + btnHTML;
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    var body = dialog.querySelector("#diffBody");
+
+    function renderDiff(idx) {
+      var d = diffs[idx];
+      var beforeLines = (d.before || "").split("\n");
+      var afterLines = (d.after || "").split("\n");
+      // 简单逐行对比
+      var maxLines = Math.max(beforeLines.length, afterLines.length);
+      var html = '<div class="diff-cols">' +
+        '<div class="diff-col diff-col-before"><div class="diff-col-title">修正前</div>' +
+        '<div class="diff-col-body">';
+      for (var i = 0; i < beforeLines.length; i++) {
+        var changed = i < afterLines.length && beforeLines[i] !== afterLines[i];
+        html += '<div class="diff-line' + (changed ? ' diff-changed' : '') + '">' + esc(beforeLines[i]) + '</div>';
+      }
+      html += '</div></div>' +
+        '<div class="diff-col diff-col-after"><div class="diff-col-title">修正后</div>' +
+        '<div class="diff-col-body">';
+      for (var i = 0; i < afterLines.length; i++) {
+        var changed = i < beforeLines.length && beforeLines[i] !== afterLines[i];
+        html += '<div class="diff-line' + (changed ? ' diff-changed' : '') + '">' + esc(afterLines[i]) + '</div>';
+      }
+      html += '</div></div></div>';
+      body.innerHTML = html;
+      // 同步滚动
+      var cols = body.querySelectorAll(".diff-col-body");
+      if (cols.length === 2) {
+        var syncing = false;
+        cols.forEach(function (col) {
+          col.addEventListener("scroll", function () {
+            if (syncing) return;
+            syncing = true;
+            cols.forEach(function (other) {
+              if (other !== col) other.scrollTop = col.scrollTop;
+            });
+            syncing = false;
+          });
+        });
+      }
+    }
+
+    renderDiff(0);
+
+    // 标签切换
+    dialog.querySelectorAll(".diff-tab").forEach(function (tab) {
+      tab.addEventListener("click", function () {
+        dialog.querySelectorAll(".diff-tab").forEach(function (t) { t.classList.remove("active"); });
+        tab.classList.add("active");
+        renderDiff(parseInt(tab.dataset.idx, 10));
+      });
+    });
+
+    var closeBtn = dialog.querySelector("#diffCloseBtn");
+    closeBtn.addEventListener("click", function () {
+      document.body.removeChild(overlay);
+    });
+    overlay.addEventListener("click", function (e) {
+      if (e.target === overlay) document.body.removeChild(overlay);
     });
   }
 
