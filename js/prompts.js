@@ -31,6 +31,178 @@
     C: { key: "C", name: "策略类", desc: "需收集信息/完成任务/满足条件才能使用，强调智慧" }
   };
 
+  // 核心设定模板（用于非金手指类型：言情、都市、悬疑等）
+  var CORE_SETTING_TEMPLATES = {
+    A: { key: "A", name: "人物关系驱动", desc: "以人物关系网络为核心，设计情感纠葛与角色成长线" },
+    B: { key: "B", name: "事件驱动", desc: "以关键事件为节点，推动剧情和人物变化" },
+    C: { key: "C", name: "悬疑线驱动", desc: "以谜题/悬念为主线，层层递进揭示真相" }
+  };
+
+  // ---------------- 各类型基础写作守则 ----------------
+
+  // 言情/校园 基础规则
+  var ROMANCE_BASE_RULES = [
+    "你是一位顶级网络小说作家，擅长写言情/校园/都市情感类小说。",
+    "文风参考：《偷偷藏不住》《难哄》《告白》《你是我的荣耀》等优质言情网文的细腻节奏。",
+    "",
+    "【核心写作原则】",
+    "1. 情感细腻：通过微表情、小动作、心理细节展现人物内心变化，避免直白说教。",
+    "2. 对话驱动：用自然、有个性的对话推进剧情和关系发展，每个角色说话风格要鲜明。",
+    "3. 甜虐交织：甜蜜与矛盾交替推进，甜要甜到心动，虐要虐到心碎，但虐必有糖。",
+    "4. 人物弧光：主角在感情发展中要有成长变化，从相识到相知到相爱要有层次。",
+    "5. 句式长短结合：日常叙事以中长句为主，关键情感场景可用短句增强冲击力。",
+    "6. 禁止刻意断句：禁止大量使用「他——」「那里——」「忽然——」等切碎句。",
+    "",
+    "【排版要求】（严格遵守）",
+    "1. 不要一句一段。一个自然段通常包含2~5句话，以流畅叙事为第一优先级。",
+    "2. 不要大量空行。段落之间保留一个空行即可，禁止连续多个空行。",
+    "3. 不要频繁使用破折号。每章破折号使用不超过5次。",
+    "4. 对话可以单独成段，但叙述性文字必须组成完整段落。",
+    "5. 禁止输出写作分析、字数统计、创作说明等元信息，只输出正文。",
+    "",
+    "【情感描写要求】",
+    "- 用细节代替直白表白：心跳加速、不自觉的小动作、欲言又止。",
+    "- 善用环境烘托：天气、光线、音乐、气味配合情感氛围。",
+    "- 内心戏要有层次：从犹豫→心动→确认→表达，不能一步到位。",
+    "",
+    "【互动描写示范】",
+    "错误：「他喜欢她，她也喜欢他，于是他们在一起了。」",
+    "正确：",
+    "「他伸手帮她把碎发别到耳后，指尖擦过耳廓的瞬间，她整个人僵住了。",
+    "『别动。』他的声音很轻，像是怕惊扰了什么。",
+    "她没敢抬头，却感觉耳根烧得厉害。」",
+    "",
+    "【冲突设计要求】误会和矛盾要有合理原因，不能为虐而虐。解决冲突要靠沟通和成长，不能靠巧合。"
+  ].join("\n");
+
+  // 言情/校园 章节类型
+  var ROMANCE_CHAPTER_TYPES = {
+    encounter:  { key: "encounter",  name: "初遇章",   min: 2200, max: 2800, desc: "初次相遇、建立印象、埋下心动种子" },
+    heartbeat:  { key: "heartbeat",  name: "心动章",   min: 2500, max: 3000, desc: "暧昧萌芽、小鹿乱撞、意识到心意" },
+    sweet:      { key: "sweet",      name: "甜蜜章",   min: 2500, max: 3000, desc: "甜蜜互动、感情升温、撒糖" },
+    daily:      { key: "daily",      name: "日常章",   min: 2200, max: 2800, desc: "校园/生活日常、群像互动、轻松过渡" },
+    misunder:   { key: "misunder",   name: "误会章",   min: 2500, max: 3200, desc: "产生误会、嫉妒、情感波折" },
+    conflict:   { key: "conflict",   name: "冲突章",   min: 2500, max: 3200, desc: "矛盾爆发、冷战、分离" },
+    reconcile:  { key: "reconcile",  name: "和解章",   min: 2500, max: 3000, desc: "消除误会、道歉、关系修复" },
+    confess:    { key: "confess",    name: "告白章",   min: 2800, max: 3500, desc: "表白、确认关系、重大情感转折" },
+    climax:     { key: "climax",     name: "高潮章",   min: 3000, max: 3500, desc: "卷末情感高潮、关键抉择" },
+    wrap:       { key: "wrap",       name: "收束章",   min: 2800, max: 3500, desc: "卷末收束、新篇章铺垫" }
+  };
+
+  // 都市/现实 基础规则
+  var URBAN_BASE_RULES = [
+    "你是一位顶级网络小说作家，擅长写都市/现实题材小说。",
+    "文风参考：《大江大河》《人世间》等现实主义作品的扎实笔触，结合网文的节奏感。",
+    "",
+    "【核心写作原则】",
+    "1. 真实感：场景、对话、人物行为要贴近现实生活，细节要有烟火气。",
+    "2. 冲突驱动：职场竞争、家庭矛盾、社会压力等现实冲突推动剧情。",
+    "3. 人物立体：每个角色都有自己的立场和苦衷，没有纯粹的反派。",
+    "4. 成长线：主角通过解决现实问题获得成长，不靠开挂。",
+    "5. 句式长短结合：叙事流畅为主，关键场景用短句增强冲击力。",
+    "6. 禁止刻意断句：禁止大量使用破折号切碎句。",
+    "",
+    "【排版要求】（严格遵守）",
+    "1. 不要一句一段。一个自然段通常包含2~5句话。",
+    "2. 不要大量空行。段落之间保留一个空行即可。",
+    "3. 不要频繁使用破折号。每章破折号使用不超过5次。",
+    "4. 对话可以单独成段，但叙述性文字必须组成完整段落。",
+    "5. 禁止输出写作分析、字数统计、创作说明等元信息，只输出正文。",
+    "",
+    "【场景描写要求】都市场景要有生活气息：办公室政治、街边小店、通勤路上、深夜加班。用具体细节代替空洞描述。",
+    "",
+    "【对话要求】符合人物身份和年龄。职场对话专业简练，家庭对话有烟火气，朋友对话有调侃。"
+  ].join("\n");
+
+  var URBAN_CHAPTER_TYPES = {
+    setup:    { key: "setup",    name: "铺垫章", min: 2200, max: 2800, desc: "引入人物、建立场景、铺设矛盾" },
+    develop:  { key: "develop",  name: "发展章", min: 2500, max: 3000, desc: "推进事件、深化关系、矛盾升级" },
+    conflict: { key: "conflict", name: "冲突章", min: 2500, max: 3200, desc: "矛盾爆发、抉择、危机" },
+    emotion:  { key: "emotion",  name: "情感章", min: 2500, max: 3200, desc: "内心挣扎、情感释放、人物弧光" },
+    climax:   { key: "climax",   name: "高潮章", min: 3000, max: 3500, desc: "卷末高潮、关键转折" },
+    wrap:     { key: "wrap",     name: "收束章", min: 2800, max: 3500, desc: "收束、新线索铺垫" }
+  };
+
+  // 悬疑/推理 基础规则
+  var MYSTERY_BASE_RULES = [
+    "你是一位顶级网络小说作家，擅长写悬疑/推理/惊悚类小说。",
+    "文风参考：《白夜行》《嫌疑人X的献身》《心理罪》等悬疑作品的紧张节奏。",
+    "",
+    "【核心写作原则】",
+    "1. 悬念至上：每章必须有悬念钩子，章末必须留扣。大悬念套小悬念，层层递进。",
+    "2. 信息控制：精确控制读者知道的信息量。伏笔要埋得自然，揭秘要有冲击力。",
+    "3. 氛围营造：善用环境、声音、光影、心理描写营造紧张氛围。",
+    "4. 逻辑严密：推理过程必须有理有据，线索链要完整，结局要经得起推敲。",
+    "5. 红鲱鱼：适当设置误导性线索，但最终真相要有充分铺垫。",
+    "6. 禁止刻意断句：禁止大量使用破折号切碎句。",
+    "",
+    "【排版要求】（严格遵守）",
+    "1. 不要一句一段（除关键悬念揭示外）。一个自然段通常包含2~5句话。",
+    "2. 不要大量空行。段落之间保留一个空行即可。",
+    "3. 不要频繁使用破折号。每章破折号使用不超过5次。",
+    "4. 对话可以单独成段，但叙述性文字必须组成完整段落。",
+    "5. 禁止输出写作分析、字数统计、创作说明等元信息，只输出正文。",
+    "",
+    "【悬念钩子示范】",
+    "错误：「他走进了房间，发现了一些奇怪的东西。」",
+    "正确：",
+    "「门把手上有干涸的血迹。",
+    "推开门的瞬间，一股腐甜的气味扑面而来。房间里的时钟还在走，但所有的家具都被翻了过来。",
+    "最诡异的是墙上——有人用口红写了一行字：『你终于来了。』」",
+    "",
+    "【线索管理】每条线索至少出现两次（埋设+回收），重要线索要在不经意处反复暗示。"
+  ].join("\n");
+
+  var MYSTERY_CHAPTER_TYPES = {
+    foreshadow: { key: "foreshadow", name: "伏笔章", min: 2200, max: 2800, desc: "埋设线索、建立悬疑氛围、引入谜团" },
+    investigate:{ key: "investigate",name: "调查章", min: 2500, max: 3000, desc: "搜集证据、走访调查、推理分析" },
+    clue:       { key: "clue",       name: "线索章", min: 2500, max: 3000, desc: "关键线索发现、拼图拼合" },
+    twist:      { key: "twist",      name: "反转章", min: 2800, max: 3500, desc: "剧情反转、意外发现、颠覆认知" },
+    tension:    { key: "tension",    name: "紧张章", min: 2800, max: 3500, desc: "危机逼近、追逐对峙、命悬一线" },
+    reveal:     { key: "reveal",     name: "揭秘章", min: 3000, max: 3500, desc: "真相揭露、逻辑闭环" },
+    climax:     { key: "climax",     name: "高潮章", min: 3000, max: 3500, desc: "卷末高潮、终极对决" },
+    wrap:       { key: "wrap",       name: "收束章", min: 2800, max: 3500, desc: "收束、留新悬念" }
+  };
+
+  // 科幻/末世 基础规则
+  var SCIFI_BASE_RULES = [
+    "你是一位顶级网络小说作家，擅长写科幻/末世/赛博朋克类小说。",
+    "文风参考：《三体》《流浪地球》《全球高武》等科幻/末世作品。",
+    "",
+    "【核心写作原则】",
+    "1. 硬核设定：科技/末世设定要自洽，有内在逻辑，不随意开挂。",
+    "2. 生存压力：末世环境下资源稀缺、人性考验、团队协作是核心驱动力。",
+    "3. 科技想象：基于现实科技合理延伸，黑科技要有使用限制和代价。",
+    "4. 宏大叙事：个人命运与文明存亡交织，格局要大。",
+    "5. 句式长短结合：叙事流畅为主，战斗和危机场景用短句。",
+    "6. 禁止刻意断句：禁止大量使用破折号切碎句。",
+    "",
+    "【排版要求】（严格遵守）",
+    "1. 不要一句一段。一个自然段通常包含2~5句话。",
+    "2. 不要大量空行。段落之间保留一个空行即可。",
+    "3. 不要频繁使用破折号。每章破折号使用不超过5次。",
+    "4. 对话可以单独成段，但叙述性文字必须组成完整段落。",
+    "5. 禁止输出写作分析、字数统计、创作说明等元信息，只输出正文。",
+    "",
+    "【系统提示格式】用「【警告：...】」「【检测到：...】」的样式，例如：",
+    "【警告：辐射值超标，建议立即撤离】",
+    "【检测到未知生物信号，距离：2.3公里】",
+    "",
+    "【战斗/生存描写要求】写出科技装备的使用细节、环境危害的具象化描写、团队的配合与牺牲。",
+    "",
+    "【代价描写要求】科技使用必须有代价：能源消耗、身体损伤、精神负荷等。"
+  ].join("\n");
+
+  var SCIFI_CHAPTER_TYPES = {
+    transition: { key: "transition", name: "过渡章", min: 2200, max: 2500, desc: "探索环境、资源收集、日常生存" },
+    buildup:    { key: "buildup",    name: "铺垫章", min: 2500, max: 3000, desc: "情报收集、策略制定、队伍整合" },
+    crisis:     { key: "crisis",     name: "危机章", min: 2800, max: 3500, desc: "突发危机、怪物袭击、环境灾难" },
+    battle:     { key: "battle",     name: "战斗章", min: 3000, max: 3500, desc: "战斗、突围、攻防战" },
+    discover:   { key: "discover",   name: "发现章", min: 2500, max: 3000, desc: "新区域发现、科技突破、真相碎片" },
+    climax:     { key: "climax",     name: "高潮章", min: 3000, max: 3500, desc: "卷末高潮、大决战" },
+    wrap:       { key: "wrap",       name: "收束章", min: 3000, max: 3500, desc: "卷末悬念、新篇章开启" }
+  };
+
   // ---------------- 基础写作守则（SKILL 第五章，所有创作共用的底座）----------------
   var BASE_RULES = [
     "你是一位顶级网络小说作家，擅长写玄幻/仙侠/都市修仙/末世/LitRPG 等爽文。",
@@ -80,10 +252,75 @@
     "【情感描写要求】通过动作、简短独白、誓言展现，禁止滥情。"
   ].join("\n");
 
+  // ---------------- 类型配置总表 ----------------
+  var GENRE_PROFILES = {
+    xuanhuan: {
+      label: "玄幻/修仙",
+      hasGoldenFinger: true,
+      baseRules: BASE_RULES,
+      step2Title: "金手指设计",
+      step2Templates: GOLDEN_FINGERER_TEMPLATES,
+      chapterTypes: CHAPTER_TYPES,
+      outlinePerChapter: "| 金手指：[使用情况] | 代价：[体现]",
+      outlineSettingLabel: "金手指设定",
+      chapterSettingLabel: "金手指设定（务必遵守限制与代价）",
+      chapterSettingRule: "2. 必须体现金手指的使用及其代价（若本章大纲涉及）。"
+    },
+    romance: {
+      label: "言情/校园",
+      hasGoldenFinger: false,
+      baseRules: ROMANCE_BASE_RULES,
+      step2Title: "人物关系与核心设定",
+      step2Templates: CORE_SETTING_TEMPLATES,
+      chapterTypes: ROMANCE_CHAPTER_TYPES,
+      outlinePerChapter: "| 情感线：[进展] | 关系变化：[体现]",
+      outlineSettingLabel: "核心设定",
+      chapterSettingLabel: "核心设定（人物关系、性格、背景）",
+      chapterSettingRule: "2. 必须体现情感线的推进和人物关系的变化（若本章大纲涉及）。"
+    },
+    urban: {
+      label: "都市/现实",
+      hasGoldenFinger: false,
+      baseRules: URBAN_BASE_RULES,
+      step2Title: "核心设定",
+      step2Templates: CORE_SETTING_TEMPLATES,
+      chapterTypes: URBAN_CHAPTER_TYPES,
+      outlinePerChapter: "| 核心矛盾：[进展] | 人物发展：[体现]",
+      outlineSettingLabel: "核心设定",
+      chapterSettingLabel: "核心设定（人物关系、社会背景）",
+      chapterSettingRule: "2. 必须体现核心矛盾的推进和人物成长（若本章大纲涉及）。"
+    },
+    mystery: {
+      label: "悬疑/推理",
+      hasGoldenFinger: false,
+      baseRules: MYSTERY_BASE_RULES,
+      step2Title: "核心设定与悬疑线",
+      step2Templates: CORE_SETTING_TEMPLATES,
+      chapterTypes: MYSTERY_CHAPTER_TYPES,
+      outlinePerChapter: "| 线索：[埋设/回收] | 悬念：[设置/解答]",
+      outlineSettingLabel: "核心设定",
+      chapterSettingLabel: "核心设定（案件背景、人物关系、线索网）",
+      chapterSettingRule: "2. 必须体现线索的埋设或回收，维持悬念节奏（若本章大纲涉及）。"
+    },
+    scifi: {
+      label: "科幻/末世",
+      hasGoldenFinger: true,
+      baseRules: SCIFI_BASE_RULES,
+      step2Title: "科技/金手指设定",
+      step2Templates: GOLDEN_FINGERER_TEMPLATES,
+      chapterTypes: SCIFI_CHAPTER_TYPES,
+      outlinePerChapter: "| 科技/能力：[使用情况] | 代价：[体现]",
+      outlineSettingLabel: "科技/金手指设定",
+      chapterSettingLabel: "科技/金手指设定（务必遵守限制与代价）",
+      chapterSettingRule: "2. 必须体现科技/能力的使用及其代价（若本章大纲涉及）。"
+    }
+  };
+
   // ---------------- 1. 需求确认（SKILL 阶段1）----------------
   function buildRequirementConfirm(req) {
+    var profile = GENRE_PROFILES[req.genre] || GENRE_PROFILES.xuanhuan;
     var sys = [
-      BASE_RULES,
+      profile.baseRules,
       "",
       "你现在处于「需求确认」阶段。根据用户提供的小说要素，整理为一份清晰的「需求确认表」，并简短补充你的创作建议（如风格定位、爽点方向）。格式如下：",
       "",
@@ -156,24 +393,71 @@
     return { system: sys, messages: [{ role: "user", content: user }] };
   }
 
+  // ---------------- 2b. 核心设定（言情/都市/悬疑等非金手指类型）----------------
+  function buildCoreSetting(req, templateKey, requirementConfirmText) {
+    var tpl = CORE_SETTING_TEMPLATES[templateKey] || CORE_SETTING_TEMPLATES.A;
+    var profile = GENRE_PROFILES[req.genre] || GENRE_PROFILES.romance;
+    var sys = [
+      profile.baseRules,
+      "",
+      "你现在处于「" + profile.step2Title + "」阶段。",
+      "",
+      "【设计原则】",
+      "1. 人物关系网络要丰富且有层次，主角与每个配角的关系都要有明确定位。",
+      "2. 核心矛盾要贯穿全书，有清晰的起因、发展、高潮和解决。",
+      "3. 情感线/主线要有明确的阶段划分（如：相识→误会→和解→确认→考验→圆满）。",
+      "4. 每个重要角色要有鲜明的性格标签和成长弧光。",
+      "5. 设定要服务于剧情，不能为设定而设定。",
+      "",
+      "【输出格式（严格）】",
+      "【核心设定名称】（一句话概括本书核心看点）",
+      "【主要角色】",
+      "  · [角色名]：[身份/性格/核心特征]",
+      "  · [角色名]：[身份/性格/核心特征]",
+      "  · ……",
+      "【人物关系图】",
+      "  · [角色A] ←→ [角色B]：[关系描述]",
+      "  · ……",
+      "【核心矛盾】（2-3 句说明全书核心冲突）",
+      "【情感/主线发展阶段】",
+      "  · 初期：",
+      "  · 中期：",
+      "  · 高潮：",
+      "  · 结局：",
+      "【世界观/背景设定】（故事发生的环境、时代、社会背景）",
+      "",
+      "请基于「" + tpl.name + "」模板（" + tpl.desc + "）进行设计。"
+    ].join("\n");
+
+    var user = [
+      "需求确认：",
+      requirementConfirmText || "（见上）",
+      "",
+      "用户特殊要求：" + (req.special || "无")
+    ].join("\n");
+
+    return { system: sys, messages: [{ role: "user", content: user }] };
+  }
+
   // ---------------- 3. 大纲生成（SKILL 阶段3）----------------
   function buildOutline(req, requirementConfirmText, gfText, chapterCount) {
+    var profile = GENRE_PROFILES[req.genre] || GENRE_PROFILES.xuanhuan;
     var sys = [
-      BASE_RULES,
+      profile.baseRules,
       "",
       "你现在处于「故事大纲生成」阶段（SKILL 阶段3）。",
       "",
       "【大纲结构要求】",
       "- 每 10 章为一卷，每卷有独立小高潮。",
-      "- 每章标注：核心事件、金手指使用、代价体现。",
+      "- 每章标注：核心事件、" + profile.outlinePerChapter + "。",
       "- 卷末有悬念/收束。",
-      "- 严格遵守金手指的限制与代价设定。",
-      "- 每章标题必须唯一且贴合该章核心内容，禁止多章使用相同标题。标题应体现该章最关键的场景、事件或意象（如：识海囚笼、病毒的源代码、最后一行代码）。",
+      "- 严格遵守" + profile.outlineSettingLabel + "的设定。",
+      "- 每章标题必须唯一且贴合该章核心内容，禁止多章使用相同标题。标题应体现该章最关键的场景、事件或意象。",
       "",
       "【输出格式（严格）】",
       "第一卷：[卷名]（1-10章）",
-      "  第1章 [标题] - [核心事件] | 金手指：[使用情况] | 代价：[体现]",
-      "  第2章 [标题] - [核心事件] | 金手指：[使用情况] | 代价：[体现]",
+      "  第1章 [标题] - [核心事件] " + profile.outlinePerChapter,
+      "  第2章 [标题] - [核心事件] " + profile.outlinePerChapter,
       "  ……",
       "  第10章 [标题] - [卷末悬念]",
       "第二卷：[卷名]（11-20章）",
@@ -186,7 +470,7 @@
       "【需求确认】",
       requirementConfirmText || "（见上）",
       "",
-      "【金手指设定】",
+      "【" + profile.outlineSettingLabel + "】",
       gfText || "（见上）",
       "",
       "请据此生成大纲。"
@@ -198,12 +482,14 @@
   // ---------------- 4. 章节正文生成（SKILL 阶段4 + 字数策略）----------------
   function buildChapter(opts) {
     // opts: { requirementConfirm, goldenFinger, outline(all), thisChapterOutlineLine,
-    //         prevChapterEnding, chapterNo, chapterType, platform, customInstruction }
-    var ct = CHAPTER_TYPES[opts.chapterType] || CHAPTER_TYPES.buildup;
+    //         prevChapterEnding, chapterNo, chapterType, platform, customInstruction, genre }
+    var profile = GENRE_PROFILES[opts.genre] || GENRE_PROFILES.xuanhuan;
+    var genreChapterTypes = profile.chapterTypes;
+    var ct = genreChapterTypes[opts.chapterType] || genreChapterTypes[Object.keys(genreChapterTypes)[1]] || CHAPTER_TYPES.buildup;
     var pf = PLATFORMS[opts.platform] || PLATFORMS.fanqian;
 
     var sys = [
-      BASE_RULES,
+      profile.baseRules,
       "",
       "你现在处于「章节正文写作」阶段（SKILL 阶段4）。",
       "",
@@ -213,7 +499,7 @@
       "",
       "【写作要求】",
       "1. 严格按照本章节的大纲条目推进剧情，不跑题、不跳章。",
-      "2. 必须体现金手指的使用及其代价（若本章大纲涉及）。",
+      profile.chapterSettingRule,
       "3. 保持人物性格一致，与世界观点设定自洽。",
       "4. 章节开头第一行写：# 第" + opts.chapterNo + "章 [标题]。标题必须根据本章实际内容自拟，要求独特、有画面感，能体现本章最关键的场景或意象。禁止使用笼统或重复的标题。",
       "5. 正文段落间空行。结尾要有钩子/悬念，吸引读者看下一章。",
@@ -223,7 +509,7 @@
 
     var userParts = [];
     if (opts.requirementConfirm) userParts.push("【需求/世界观】\n" + opts.requirementConfirm);
-    if (opts.goldenFinger) userParts.push("【金手指设定（务必遵守限制与代价）】\n" + opts.goldenFinger);
+    if (opts.goldenFinger) userParts.push("【" + profile.chapterSettingLabel + "】\n" + opts.goldenFinger);
     if (opts.outline) userParts.push("【全书大纲（供参考上下文）】\n" + opts.outline);
     userParts.push("【本章大纲（必须严格按此推进）】\n" + opts.thisChapterOutlineLine);
     if (opts.prevChapterEnding) {
@@ -249,10 +535,11 @@
   }
 
   // ---------------- 6. 卷内一致性检查 ----------------
-  function buildVolumeReview(volumeName, chapterTexts) {
+  function buildVolumeReview(volumeName, chapterTexts, genre) {
     // chapterTexts: [{ chNo, title, text }, ...]
+    var profile = GENRE_PROFILES[genre] || GENRE_PROFILES.xuanhuan;
     var sys = [
-      BASE_RULES,
+      profile.baseRules,
       "",
       "你现在是一位严格的小说审校编辑，需要检查一卷内所有章节的一致性问题。",
       "",
@@ -288,10 +575,11 @@
   }
 
   // ---------------- 7. 根据审校意见修正单章 ----------------
-  function buildChapterFix(reviewResult, chapter) {
+  function buildChapterFix(reviewResult, chapter, genre) {
     // chapter: { chNo, title, text }
+    var profile = GENRE_PROFILES[genre] || GENRE_PROFILES.xuanhuan;
     var sys = [
-      BASE_RULES,
+      profile.baseRules,
       "",
       "你现在是一位资深小说编辑，需要根据审校意见修正章节内容。",
       "",
@@ -320,22 +608,23 @@
 
   // ---------------- 8. 大纲扩展 ----------------
   function buildOutlineExtend(opts) {
-    // opts: { requirement, goldenFinger, existingOutline, recentChapters, startCh, count }
+    // opts: { requirement, goldenFinger, existingOutline, recentChapters, startCh, count, genre }
+    var profile = GENRE_PROFILES[opts.genre] || GENRE_PROFILES.xuanhuan;
     var sys = [
-      BASE_RULES,
+      profile.baseRules,
       "",
       "你现在处于「大纲扩展」阶段，需要基于已有剧情续写后续章节的大纲。",
       "",
       "【核心规则】",
       "1. 必须承接已有剧情，不得推翻原设定、更换主线、无理由新增Boss或世界观。",
-      "2. 保持主角设定、金手指规则、已有伏笔、角色关系不变。",
+      "2. 保持主角设定、已有伏笔、角色关系不变。",
       "3. 每 10 章为一卷，每卷有独立小高潮，卷末有悬念/收束。",
-      "4. 每章标注核心事件、金手指使用与代价。",
+      "4. 每章标注核心事件、" + profile.outlinePerChapter + "。",
       "5. 每章标题必须唯一，贴合该章核心内容。",
       "",
       "【输出格式（严格，与已有大纲保持一致）】",
       "第X卷：[卷名]（N-M章）",
-      "  第N章 [标题] - [核心事件] | 金手指：[使用情况] | 代价：[体现]",
+      "  第N章 [标题] - [核心事件] " + profile.outlinePerChapter,
       "  ...",
       "",
       "请从第" + opts.startCh + "章开始，生成 " + opts.count + " 章的大纲。"
@@ -343,7 +632,7 @@
 
     var userParts = [];
     if (opts.requirement) userParts.push("【需求确认】\n" + opts.requirement);
-    if (opts.goldenFinger) userParts.push("【金手指设定】\n" + opts.goldenFinger);
+    if (opts.goldenFinger) userParts.push("【" + profile.outlineSettingLabel + "】\n" + opts.goldenFinger);
     userParts.push("【已有大纲（前" + (opts.startCh - 1) + "章）】\n" + tail(opts.existingOutline, 3000));
     if (opts.recentChapters) userParts.push("【最近章节摘要（实际剧情进展）】\n" + opts.recentChapters);
     userParts.push("请基于以上信息，续写第" + opts.startCh + "-" + (opts.startCh + opts.count - 1) + "章的大纲。");
@@ -369,9 +658,12 @@
     CHAPTER_TYPES: CHAPTER_TYPES,
     PLATFORMS: PLATFORMS,
     GOLDEN_FINGERER_TEMPLATES: GOLDEN_FINGERER_TEMPLATES,
+    CORE_SETTING_TEMPLATES: CORE_SETTING_TEMPLATES,
+    GENRE_PROFILES: GENRE_PROFILES,
     BASE_RULES: BASE_RULES,
     buildRequirementConfirm: buildRequirementConfirm,
     buildGoldenFinger: buildGoldenFinger,
+    buildCoreSetting: buildCoreSetting,
     buildOutline: buildOutline,
     buildChapter: buildChapter,
     buildNextChapter: buildNextChapter,

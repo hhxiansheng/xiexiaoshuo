@@ -15,8 +15,9 @@
 
   var state = {
     bookTitle: "",          // 书名（= 根目录文件夹名）
+    genre: "xuanhuan",      // 小说类型：xuanhuan/romance/urban/mystery/scifi
     requirement: "",        // 需求确认文本
-    goldenFinger: "",       // 金手指文本
+    goldenFinger: "",       // 金手指/核心设定文本
     worldview: "",          // 世界观文本（可空，默认合并进 requirement）
     outline: "",            // 大纲全文
     targetWords: 0,         // 目标总字数（用户手动设定）
@@ -29,6 +30,7 @@
 
   function reset() {
     state.bookTitle = "";
+    state.genre = "xuanhuan";
     state.requirement = "";
     state.goldenFinger = "";
     state.worldview = "";
@@ -144,6 +146,10 @@
     state.requirement = text;
     return NW.fs.writeFile(SETTING_DIR, "需求确认.md", text);
   }
+  function saveGenre(genre) {
+    state.genre = genre;
+    return NW.fs.writeFile(SETTING_DIR, "类型.txt", genre);
+  }
   function saveGoldenFinger(text) {
     state.goldenFinger = text;
     return NW.fs.writeFile(SETTING_DIR, "金手指.md", text);
@@ -204,13 +210,15 @@
       NW.fs.readFile(SETTING_DIR, "金手指.md"),
       NW.fs.readFile(SETTING_DIR, "世界观.md"),
       NW.fs.readFile(SETTING_DIR, "大纲.md"),
-      NW.fs.readFile(SETTING_DIR, "目标字数.txt")
+      NW.fs.readFile(SETTING_DIR, "目标字数.txt"),
+      NW.fs.readFile(SETTING_DIR, "类型.txt")
     ]).then(function (arr) {
       state.requirement = arr[0] || "";
       state.goldenFinger = arr[1] || "";
       state.worldview = arr[2] || "";
       state.outline = arr[3] || "";
       state.targetWords = parseInt(arr[4], 10) || 0;
+      state.genre = arr[5] || "xuanhuan";
       // 从已存在章节统计进度
       return recomputeProgress();
     }).then(function () {
@@ -298,6 +306,7 @@
     volumeDirForChapter: volumeDirForChapter,
     chapterFileName: chapterFileName,
     saveRequirement: saveRequirement,
+    saveGenre: saveGenre,
     saveGoldenFinger: saveGoldenFinger,
     saveOutline: saveOutline,
     saveWorldview: saveWorldview,

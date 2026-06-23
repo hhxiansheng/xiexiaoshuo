@@ -123,13 +123,27 @@
       <section id="view-wizard" class="view">
         <div class="view-narrow">
           <h1>🆕 新书向导</h1>
-          <p class="subtitle">按四步完成新小说的设定与首章：需求 → 金手指 → 大纲 → 写第一章。</p>
+          <p class="subtitle">按四步完成新小说的设定与首章：需求 → 核心设定 → 大纲 → 写第一章。</p>
 
           <div class="steps">
             <div class="step active"><span class="num">1</span>需求确认</div>
-            <div class="step"><span class="num">2</span>金手指设计</div>
+            <div class="step"><span class="num">2</span><span id="step2Label">金手指设计</span></div>
             <div class="step"><span class="num">3</span>大纲生成</div>
             <div class="step"><span class="num">4</span>写第一章</div>
+          </div>
+
+          <!-- 类型选择 -->
+          <div class="card genre-select-card">
+            <div class="field" style="margin-bottom:0">
+              <label>📚 小说类型</label>
+              <select id="genreSelect">
+                <option value="xuanhuan">玄幻/修仙（金手指、升级、战斗）</option>
+                <option value="romance">言情/校园（情感、关系、甜虐）</option>
+                <option value="urban">都市/现实（职场、生活、成长）</option>
+                <option value="mystery">悬疑/推理（线索、悬念、反转）</option>
+                <option value="scifi">科幻/末世（科技、生存、硬核）</option>
+              </select>
+            </div>
           </div>
 
           <!-- Step 1: 需求 -->
@@ -139,20 +153,20 @@
               <div class="row-2">
                 <div class="field">
                   <label>小说类型<span class="req">*</span></label>
-                  <input id="fType" type="text" placeholder="玄幻升级流 / 都市修仙 / 末世 / LitRPG">
+                  <input id="fType" type="text" placeholder="玄幻升级流 / 校园言情 / 都市现实 / 悬疑推理">
                 </div>
                 <div class="field">
                   <label>核心主题<span class="req">*</span></label>
-                  <input id="fTheme" type="text" placeholder="复仇+守护+成长 / 逆天改命">
+                  <input id="fTheme" type="text" placeholder="复仇+守护 / 青春恋爱 / 职场成长 / 悬疑揭秘">
                 </div>
               </div>
               <div class="field">
                 <label>主角背景与性格<span class="req">*</span></label>
-                <textarea id="fProtagonist" rows="3" placeholder="25岁程序员重生回高中，性格谨慎，外冷内热…"></textarea>
+                <textarea id="fProtagonist" rows="3" placeholder="例：18岁女高中生，性格活泼开朗但内心敏感…"></textarea>
               </div>
               <div class="field">
                 <label>世界观基础设定<span class="req">*</span></label>
-                <textarea id="fWorldview" rows="3" placeholder="现代都市+隐藏修仙界，练气-筑基-金丹-元婴…"></textarea>
+                <textarea id="fWorldview" rows="3" placeholder="例：现代都市重点高中，普通校园生活…"></textarea>
               </div>
               <div class="row-2">
                 <div class="field">
@@ -172,31 +186,61 @@
             </div>
           </div>
 
-          <!-- Step 2: 金手指 -->
+          <!-- Step 2: 金手指 / 核心设定 -->
           <div id="wizStep2" class="wiz-panel" style="display:none">
-            <div class="card">
-              <div class="card-title">选择金手指模板</div>
-              <div class="tpl-grid">
-                <div class="tpl-card selected" data-tpl="A">
-                  <div class="tpl-name">A · 收集类</div>
-                  <div class="tpl-desc">收集能量/碎片/记忆/情感，转化为强化/能力/资源</div>
+            <!-- 金手指面板（玄幻/科幻） -->
+            <div id="wizStep2GF">
+              <div class="card">
+                <div class="card-title">选择金手指模板</div>
+                <div class="tpl-grid">
+                  <div class="tpl-card selected" data-tpl="A">
+                    <div class="tpl-name">A · 收集类</div>
+                    <div class="tpl-desc">收集能量/碎片/记忆/情感，转化为强化/能力/资源</div>
+                  </div>
+                  <div class="tpl-card" data-tpl="B">
+                    <div class="tpl-name">B · 成长类</div>
+                    <div class="tpl-desc">通过特定行为获得成长，解锁新功能</div>
+                  </div>
+                  <div class="tpl-card" data-tpl="C">
+                    <div class="tpl-name">C · 策略类</div>
+                    <div class="tpl-desc">需收集信息/完成任务/满足条件才能使用，强调智慧</div>
+                  </div>
                 </div>
-                <div class="tpl-card" data-tpl="B">
-                  <div class="tpl-name">B · 成长类</div>
-                  <div class="tpl-desc">通过特定行为获得成长，解锁新功能</div>
-                </div>
-                <div class="tpl-card" data-tpl="C">
-                  <div class="tpl-name">C · 策略类</div>
-                  <div class="tpl-desc">需收集信息/完成任务/满足条件才能使用，强调智慧</div>
+                <div style="margin-top:14px">
+                  <button id="btnGenGF" class="btn btn-primary">✨ 设计金手指</button>
                 </div>
               </div>
-              <div style="margin-top:14px">
-                <button id="btnGenGF" class="btn btn-primary">✨ 设计金手指</button>
+              <div class="card">
+                <div class="card-title">金手指方案（可编辑，将保存为 设定/金手指.md）</div>
+                <div id="gfResult" class="result-box" contenteditable="true">点击上方按钮生成…</div>
               </div>
             </div>
-            <div class="card">
-              <div class="card-title">金手指方案（可编辑，将保存为 设定/金手指.md）</div>
-              <div id="gfResult" class="result-box" contenteditable="true">点击上方按钮生成…</div>
+            <!-- 核心设定面板（言情/都市/悬疑） -->
+            <div id="wizStep2Core" style="display:none">
+              <div class="card">
+                <div class="card-title" id="coreSettingTitle">选择核心设定模板</div>
+                <div class="tpl-grid" id="coreSettingTplGrid">
+                  <div class="tpl-card selected" data-tpl="A">
+                    <div class="tpl-name">A · 人物关系驱动</div>
+                    <div class="tpl-desc">以人物关系网络为核心，设计情感纠葛与角色成长线</div>
+                  </div>
+                  <div class="tpl-card" data-tpl="B">
+                    <div class="tpl-name">B · 事件驱动</div>
+                    <div class="tpl-desc">以关键事件为节点，推动剧情和人物变化</div>
+                  </div>
+                  <div class="tpl-card" data-tpl="C">
+                    <div class="tpl-name">C · 悬疑线驱动</div>
+                    <div class="tpl-desc">以谜题/悬念为主线，层层递进揭示真相</div>
+                  </div>
+                </div>
+                <div style="margin-top:14px">
+                  <button id="btnGenCore" class="btn btn-primary">✨ 设计核心设定</button>
+                </div>
+              </div>
+              <div class="card">
+                <div class="card-title" id="coreSettingResultTitle">核心设定方案（可编辑，将保存为 设定/金手指.md）</div>
+                <div id="coreResult" class="result-box" contenteditable="true">点击上方按钮生成…</div>
+              </div>
             </div>
           </div>
 
@@ -206,7 +250,7 @@
               <div class="row-2" style="align-items:end">
                 <div>
                   <div class="card-title">生成大纲</div>
-                  <p class="hint">按每 10 章一卷规划，每章标注核心事件、金手指使用与代价。</p>
+                  <p class="hint">按每 10 章一卷规划，每章标注核心事件与发展要素。</p>
                 </div>
                 <div class="field" style="margin-bottom:0">
                   <label>章节数</label>
@@ -321,11 +365,11 @@
   <div id="toastWrap" class="toast-wrap"></div>
 
   <!-- 脚本：注意加载顺序，依赖在前 -->
-  <script src="js/config.js?v=11"></script>
-  <script src="js/fs.js?v=11"></script>
-  <script src="js/ai.js?v=11"></script>
-  <script src="js/prompts.js?v=11"></script>
-  <script src="js/store.js?v=11"></script>
-  <script src="js/app.js?v=11"></script>
+  <script src="js/config.js?v=12"></script>
+  <script src="js/fs.js?v=12"></script>
+  <script src="js/ai.js?v=12"></script>
+  <script src="js/prompts.js?v=12"></script>
+  <script src="js/store.js?v=12"></script>
+  <script src="js/app.js?v=12"></script>
 </body>
 </html>

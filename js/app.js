@@ -135,6 +135,8 @@
       bindSettingsCenter();
       log("init: bindCheck");
       bindCheck();
+      // 初始化类型选择器 UI
+      updateGenreUI(NS.store.get().genre || "xuanhuan");
       log("init: 所有 bind 完成");
     } catch (e) {
       console.error("[init] 初始化抛错：", e);
@@ -200,6 +202,11 @@
         return NS.store.loadAll();
       }).then(function (st) {
         refreshTree();
+        if (st && st.genre) {
+          var gs = $("#genreSelect");
+          if (gs) gs.value = st.genre;
+          updateGenreUI(st.genre);
+        }
         if (st && (st.outline || st.requirement)) {
           // 已有作品，进编辑器
           showView("editor");
@@ -235,6 +242,11 @@
       if (!st) return;
       refreshTree();
       refreshTopbar();
+      if (st.genre) {
+        var gs = $("#genreSelect");
+        if (gs) gs.value = st.genre;
+        updateGenreUI(st.genre);
+      }
       showView(st.outline ? "editor" : "wizard");
     }).catch(function (e) { toast("恢复失败：" + e.message, "err"); });
   }
@@ -309,18 +321,38 @@
       if (wizardStep < 4) { wizardStep++; renderWizardStep(); }
     });
 
+    // 类型选择器
+    var genreSelect = $("#genreSelect");
+    if (genreSelect) {
+      genreSelect.addEventListener("change", function () {
+        updateGenreUI(genreSelect.value);
+        if (NS.fs.getRoot()) {
+          NS.store.saveGenre(genreSelect.value);
+        }
+      });
+    }
+
     // Step1 需求确认
     $("#btnGenReq").addEventListener("click", genRequirement);
 
-    // Step2 模板选择
-    $$(".tpl-card").forEach(function (card) {
+    // Step2 模板选择（金手指）
+    $$("#wizStep2GF .tpl-card").forEach(function (card) {
       card.addEventListener("click", function () {
-        $$(".tpl-card").forEach(function (c) { c.classList.remove("selected"); });
+        $$("#wizStep2GF .tpl-card").forEach(function (c) { c.classList.remove("selected"); });
+        card.classList.add("selected");
+        wizardTpl = card.dataset.tpl;
+      });
+    });
+    // Step2 模板选择（核心设定）
+    $$("#wizStep2Core .tpl-card").forEach(function (card) {
+      card.addEventListener("click", function () {
+        $$("#wizStep2Core .tpl-card").forEach(function (c) { c.classList.remove("selected"); });
         card.classList.add("selected");
         wizardTpl = card.dataset.tpl;
       });
     });
     $("#btnGenGF").addEventListener("click", genGoldenFinger);
+    $("#btnGenCore").addEventListener("click", genCoreSetting);
 
     // Step3 大纲
     $("#btnGenOutline").addEventListener("click", genOutline);
@@ -346,9 +378,10 @@
   // 把向导页三个 contenteditable 框的最新内容同步进 store
   // （用户可能直接在框里编辑过，state 里是旧的）
   function syncWizardResultsToStore() {
-    var req = $("#reqResult"), gf = $("#gfResult"), ol = $("#outlineResult");
+    var req = $("#reqResult"), gf = $("#gfResult"), core = $("#coreResult"), ol = $("#outlineResult");
     if (req && req.textContent.trim()) NS.store.get().requirement = req.textContent;
     if (gf && gf.textContent.trim()) NS.store.get().goldenFinger = gf.textContent;
+    if (core && core.textContent.trim()) NS.store.get().goldenFinger = core.textContent;
     if (ol && ol.textContent.trim()) NS.store.get().outline = ol.textContent;
   }
 
@@ -414,6 +447,7 @@
 
   function collectReqForm() {
     return {
+      genre: NS.store.get().genre || "xuanhuan",
       type: $("#fType").value.trim(),
       protagonist: $("#fProtagonist").value.trim(),
       theme: $("#fTheme").value.trim(),
@@ -421,6 +455,38 @@
       targetWords: $("#fTargetWords").value.trim(),
       special: $("#fSpecial").value.trim()
     };
+  }
+
+  // 根据类型更新向导 UI（步骤2面板、标签等）
+  function updateGenreUI(genre) {
+    var profile = NS.prompts.GENRE_PROFILES[genre] || NS.prompts.GENRE_PROFILES.xuanhuan;
+    var st = NS.store.get();
+    st.genre = genre;
+
+    // 更新步骤2标签文字
+    var step2Label = $("#step2Label");
+    if (step2Label) step2Label.textContent = profile.step2Title;
+
+    // 切换步骤2面板
+    var gfPanel = $("#wizStep2GF");
+    var corePanel = $("#wizStep2Core");
+    if (gfPanel && corePanel) {
+      if (profile.hasGoldenFinger) {
+        gfPanel.style.display = "";
+        corePanel.style.display = "none";
+      } else {
+        gfPanel.style.display = "none";
+        corePanel.style.display = "";
+      }
+    }
+
+    // 更新核心设定面板标题
+    var coreTitle = $("#coreSettingTitle");
+    if (coreTitle) coreTitle.textContent = "选择" + profile.step2Title + "模板";
+
+    // 刷新章节类型选择器
+    populateChapterTypeSelect($("#wizChType"));
+    populateChapterTypeSelect($("#editorChType"));
   }
 
   function genGoldenFinger() {
@@ -441,9 +507,27 @@
       .then(function () { setBusy(btn, false); });
   }
 
+  function genCoreSetting() {
+    var req = collectReqForm();
+    var reqText = NS.store.get().requirement || $("#reqResult").textContent;
+    if (!reqText) { toast("请先在步骤1生成需求确认", "err"); return; }
+    var btn = $("#btnGenCore"); setBusy(btn, true);
+    var box = $("#coreResult");
+    streamGenerate(function () {
+      return NS.prompts.buildCoreSetting(req, wizardTpl, reqText);
+    }, box)
+      .then(function (text) {
+        NS.store.get().goldenFinger = text;
+        return NS.fs.getRoot() ? NS.store.saveGoldenFinger(text) : null;
+      })
+      .then(function () { toast("核心设定已生成并保存", "ok"); })
+      .catch(function () {})
+      .then(function () { setBusy(btn, false); });
+  }
+
   function genOutline() {
     var reqText = NS.store.get().requirement || $("#reqResult").textContent;
-    var gfText = NS.store.get().goldenFinger || $("#gfResult").textContent;
+    var gfText = NS.store.get().goldenFinger || $("#gfResult").textContent || ($("#coreResult") ? $("#coreResult").textContent : "");
     if (!reqText || !gfText) { toast("请先完成步骤1、2", "err"); return; }
     var chCount = parseInt($("#outlineCount").value, 10) || 30;
     var btn = $("#btnGenOutline"); setBusy(btn, true);
@@ -476,8 +560,11 @@
   function populateChapterTypeSelect(sel) {
     if (!sel) return;
     sel.innerHTML = "";
-    Object.keys(NS.prompts.CHAPTER_TYPES).forEach(function (k) {
-      var t = NS.prompts.CHAPTER_TYPES[k];
+    var genre = NS.store.get().genre || "xuanhuan";
+    var profile = NS.prompts.GENRE_PROFILES[genre] || NS.prompts.GENRE_PROFILES.xuanhuan;
+    var types = profile.chapterTypes;
+    Object.keys(types).forEach(function (k) {
+      var t = types[k];
       var o = document.createElement("option");
       o.value = k;
       o.textContent = t.name + "（" + t.min + "-" + t.max + "字）" + t.desc;
@@ -490,6 +577,7 @@
     if (!ensureConfigured()) return;
     var st = NS.store.get();
     var prompt = NS.prompts.buildChapter({
+      genre: st.genre,
       requirementConfirm: st.requirement,
       goldenFinger: st.goldenFinger,
       outline: st.outline,
@@ -732,6 +820,7 @@
             var chapterType = $("#editorChType").value || "buildup";
 
             var prompt = NS.prompts.buildChapter({
+              genre: st.genre,
               requirementConfirm: st.requirement,
               goldenFinger: st.goldenFinger,
               outline: st.outline,
@@ -896,6 +985,7 @@
       return readChain.then(function (recentTexts) {
         resultBox.textContent = "正在生成大纲…";
         var prompt = NS.prompts.buildOutlineExtend({
+          genre: st.genre,
           requirement: st.requirement,
           goldenFinger: st.goldenFinger,
           existingOutline: st.outline || "",
@@ -995,7 +1085,7 @@
           return;
         }
 
-        var prompt = NS.prompts.buildVolumeReview(volDirName, chapterTexts);
+        var prompt = NS.prompts.buildVolumeReview(volDirName, chapterTexts, NS.store.get().genre);
 
         return NS.ai.chat(prompt).then(function (result) {
           // 用自定义弹窗展示结果（alert 对长文本不友好）
@@ -1076,7 +1166,7 @@
         progressText.textContent = "修正第" + ch.chNo + "章…（" + done + "/" + total + "）";
         progressBar.style.width = Math.round((done / total) * 100) + "%";
 
-        var prompt = NS.prompts.buildChapterFix(reviewResult, ch);
+        var prompt = NS.prompts.buildChapterFix(reviewResult, ch, NS.store.get().genre);
         return NS.ai.chat(prompt).then(function (fixedText) {
           if (!fixedText || fixedText.length < 200) {
             // AI 返回太短，跳过
@@ -1333,7 +1423,9 @@
   function updateWordCount() {
     var text = $("#editorText").value;
     var n = NS.prompts.countChars(text);
-    var ct = NS.prompts.CHAPTER_TYPES[$("#editorChType").value];
+    var genre = NS.store.get().genre || "xuanhuan";
+    var profile = NS.prompts.GENRE_PROFILES[genre] || NS.prompts.GENRE_PROFILES.xuanhuan;
+    var ct = profile.chapterTypes[$("#editorChType").value];
     $("#wordCount").textContent = n;
     var tip = $("#wordTip");
     if (!ct) { tip.textContent = ""; return; }
@@ -1361,11 +1453,12 @@
     btn.textContent = "⏭️ 续写下一章（第" + NS.store.toChineseNum(nextNo) + "章）";
   }
 
-  // 根据大纲关键词 + 章节在卷内的位置，自动选择章节类型
+  // 根据大纲关键词 + 章节在卷内的位置，自动选择章节类型（按类型适配）
   function autoSelectChapterType(chNo) {
     var sel = $("#editorChType");
     if (!sel) return;
     var st = NS.store.get();
+    var genre = st.genre || "xuanhuan";
     var chs = NS.store.parseOutlineChapters(st.outline || "");
     var ch = chs.filter(function (c) { return c.num === chNo; })[0];
     // 标题+详情拼一起匹配，覆盖面更大
@@ -1374,47 +1467,75 @@
     // 卷内位置（1-10）
     var posInVol = ((chNo - 1) % 10) + 1;
 
-    // 优先用大纲关键词匹配（覆盖面广）
-    // 1. 高潮章 — 最明确的类型，先匹配
-    if (/决战|高潮|大决战|最终对决|终极|最终战|决战前夕/.test(info)) {
-      sel.value = "climax"; return;
-    }
-    // 2. 战斗章 — 动作场面关键词
-    if (/战斗|突破|交手|对决|反杀|搏杀|激战|围攻|追杀|伏击|混战|恶战|血战|厮杀|爆炸|袭击|入侵|突围|对抗|格斗|狙击|进攻|防守|反击|覆灭|毁灭/.test(info)) {
-      sel.value = "battle"; return;
-    }
-    // 3. 情感章 — 内心戏和情感事件
-    if (/重逢|真相|揭露|内心|挣扎|告别|牺牲|感动|回忆|誓言|告白|离别|思念|悲伤|痛苦|眼泪|心痛|守护|约定|承诺|牵挂|担忧|恐惧|绝望|希望|温暖|深情|黑暗|黎明|孤独|觉醒|顿悟|震撼|震惊|愤怒|决心/.test(info)) {
-      sel.value = "emotion"; return;
-    }
-    // 4. 收束章 — 只用卷末专属词（"选择""决定""转折"太常见，不放这里）
-    if (/卷末|收束|尾声|新篇章|新征程|新旅程|下一卷/.test(info)) {
-      sel.value = "wrap"; return;
-    }
-    // 5. 铺垫章 — 情报收集、策划、修炼等
-    if (/情报|计划|布局|谋划|打探|分析|准备|试探|调查|追踪|推理|研究|学习|修炼|训练|实验|策划|密谋|发现|探索|线索|蛛丝马迹/.test(info)) {
-      sel.value = "buildup"; return;
-    }
-    // 6. 过渡章 — 场景切换、日常
-    if (/离开|抵达|日常|赶路|休整|返回|搬家|旅行|安顿|休息|采购|逛街|上课|回家/.test(info)) {
-      sel.value = "transition"; return;
-    }
-    // 7. 危机/冲突 — 放在战斗和铺垫之间，避免误判
-    if (/危机|冲突/.test(info)) {
-      sel.value = "battle"; return;
-    }
-
-    // 没有命中关键词，按卷内位置兜底
-    if (posInVol === 10) {
-      sel.value = "wrap";      // 卷末章 → 收束
-    } else if (posInVol === 9) {
-      sel.value = "climax";    // 倒数第二章 → 高潮
-    } else if (posInVol <= 2) {
-      sel.value = "buildup";   // 卷初 → 铺垫（新卷开篇需要铺背景）
-    } else if (posInVol <= 5) {
-      sel.value = "buildup";   // 前段 → 铺垫
+    if (genre === "romance") {
+      // 言情类关键词匹配
+      if (/告白|表白|确认关系|在一起|接受|求婚|答应/.test(info)) { sel.value = "confess"; return; }
+      if (/误会|误解|嫉妒|吃醋|冷战|猜疑|怀疑|争吵|吵架|争执|闹翻/.test(info)) { sel.value = "misunder"; return; }
+      if (/冲突|决裂|分手|离开|离别|撕裂|对峙|对抗/.test(info)) { sel.value = "conflict"; return; }
+      if (/和好|和解|道歉|原谅|理解|释怀|敞开心扉/.test(info)) { sel.value = "reconcile"; return; }
+      if (/甜蜜|约会|牵手|拥抱|亲吻|心动|暧昧|亲昵|温情|浪漫|礼物|惊喜/.test(info)) { sel.value = "sweet"; return; }
+      if (/悸动|暗生情愫|在意|注意|留意|好感|暗恋|心动|小鹿乱撞|脸红|害羞/.test(info)) { sel.value = "heartbeat"; return; }
+      if (/重逢|再见|偶遇|邂逅|初遇|相遇|撞见|结识|相识/.test(info)) { sel.value = "encounter"; return; }
+      if (/高潮|转折|真相大白|重大决定|选择|牺牲|守护|危机/.test(info)) { sel.value = "climax"; return; }
+      if (/日常|上课|放学|工作|逛街|吃饭|回家|休息|周末|假期/.test(info)) { sel.value = "daily"; return; }
+      // 兜底按位置
+      if (posInVol === 10) { sel.value = "wrap"; }
+      else if (posInVol === 9) { sel.value = "climax"; }
+      else if (posInVol <= 2) { sel.value = "encounter"; }
+      else if (posInVol <= 5) { sel.value = "heartbeat"; }
+      else { sel.value = "sweet"; }
+    } else if (genre === "urban") {
+      if (/冲突|对抗|对峙|竞争|博弈|交锋|角力/.test(info)) { sel.value = "conflict"; return; }
+      if (/情感|内心|挣扎|感悟|领悟|释怀|感动|温暖/.test(info)) { sel.value = "emotion"; return; }
+      if (/高潮|转折|逆袭|翻盘|真相|揭秘|爆发/.test(info)) { sel.value = "climax"; return; }
+      if (/收束|尾声|新篇章|新征程/.test(info)) { sel.value = "wrap"; return; }
+      if (/调查|发现|线索|计划|布局|分析|研究|学习/.test(info)) { sel.value = "develop"; return; }
+      // 兜底
+      if (posInVol === 10) { sel.value = "wrap"; }
+      else if (posInVol === 9) { sel.value = "climax"; }
+      else if (posInVol <= 2) { sel.value = "setup"; }
+      else if (posInVol <= 5) { sel.value = "develop"; }
+      else { sel.value = "conflict"; }
+    } else if (genre === "mystery") {
+      if (/真相|揭露|揭秘|答案|谜底|真相大白|水落石出/.test(info)) { sel.value = "reveal"; return; }
+      if (/反转|逆转|颠覆|意外|震惊|震惊|难以置信/.test(info)) { sel.value = "twist"; return; }
+      if (/线索|证据|发现|关键|蛛丝马迹|端倪/.test(info)) { sel.value = "clue"; return; }
+      if (/危险|追杀|威胁|陷阱|危机|命悬一线|千钧一发/.test(info)) { sel.value = "tension"; return; }
+      if (/调查|走访|询问|排查|追踪|监视|蹲守/.test(info)) { sel.value = "investigate"; return; }
+      if (/伏笔|暗示|预兆|铺垫/.test(info)) { sel.value = "foreshadow"; return; }
+      // 兜底
+      if (posInVol === 10) { sel.value = "wrap"; }
+      else if (posInVol === 9) { sel.value = "climax"; }
+      else if (posInVol <= 2) { sel.value = "foreshadow"; }
+      else if (posInVol <= 5) { sel.value = "investigate"; }
+      else { sel.value = "tension"; }
+    } else if (genre === "scifi") {
+      if (/决战|高潮|大决战|最终对决|终极|最终战/.test(info)) { sel.value = "climax"; return; }
+      if (/战斗|交战|突围|反击|进攻|防守|突袭|伏击|激战/.test(info)) { sel.value = "battle"; return; }
+      if (/发现|突破|解密|真相|遗迹|信号|异变/.test(info)) { sel.value = "discover"; return; }
+      if (/危机|灾难|袭击|入侵|警报|紧急/.test(info)) { sel.value = "crisis"; return; }
+      if (/收束|尾声|新篇章/.test(info)) { sel.value = "wrap"; return; }
+      // 兜底
+      if (posInVol === 10) { sel.value = "wrap"; }
+      else if (posInVol === 9) { sel.value = "climax"; }
+      else if (posInVol <= 2) { sel.value = "buildup"; }
+      else if (posInVol <= 5) { sel.value = "buildup"; }
+      else { sel.value = "battle"; }
     } else {
-      sel.value = "battle";    // 中段偏后 → 战斗
+      // 玄幻/修仙（默认）
+      if (/决战|高潮|大决战|最终对决|终极|最终战|决战前夕/.test(info)) { sel.value = "climax"; return; }
+      if (/战斗|突破|交手|对决|反杀|搏杀|激战|围攻|追杀|伏击|混战|恶战|血战|厮杀|爆炸|袭击|入侵|突围|对抗|格斗|狙击|进攻|防守|反击|覆灭|毁灭/.test(info)) { sel.value = "battle"; return; }
+      if (/重逢|真相|揭露|内心|挣扎|告别|牺牲|感动|回忆|誓言|告白|离别|思念|悲伤|痛苦|眼泪|心痛|守护|约定|承诺|牵挂|担忧|恐惧|绝望|希望|温暖|深情|黑暗|黎明|孤独|觉醒|顿悟|震撼|震惊|愤怒|决心/.test(info)) { sel.value = "emotion"; return; }
+      if (/卷末|收束|尾声|新篇章|新征程|新旅程|下一卷/.test(info)) { sel.value = "wrap"; return; }
+      if (/情报|计划|布局|谋划|打探|分析|准备|试探|调查|追踪|推理|研究|学习|修炼|训练|实验|策划|密谋|发现|探索|线索|蛛丝马迹/.test(info)) { sel.value = "buildup"; return; }
+      if (/离开|抵达|日常|赶路|休整|返回|搬家|旅行|安顿|休息|采购|逛街|上课|回家/.test(info)) { sel.value = "transition"; return; }
+      if (/危机|冲突/.test(info)) { sel.value = "battle"; return; }
+      // 兜底
+      if (posInVol === 10) { sel.value = "wrap"; }
+      else if (posInVol === 9) { sel.value = "climax"; }
+      else if (posInVol <= 2) { sel.value = "buildup"; }
+      else if (posInVol <= 5) { sel.value = "buildup"; }
+      else { sel.value = "battle"; }
     }
   }
 

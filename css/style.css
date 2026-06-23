@@ -232,6 +232,22 @@ select { cursor: pointer; }
 }
 .card .card-title { font-weight: 700; margin-bottom: 10px; font-size: 14px; }
 
+/* ---------------- 类型选择卡片 ---------------- */
+.genre-select-card {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  margin-bottom: 20px;
+}
+.genre-select-card .field label {
+  color: var(--primary);
+  font-size: 14px;
+}
+.genre-select-card select {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
 /* ---------------- 向导 ---------------- */
 .steps {
   display: flex; gap: 4px; margin-bottom: 26px;
@@ -409,6 +425,12 @@ table.check-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 }
 .outline-warning-banner .btn-sm {
   margin-left: auto; white-space: nowrap;
+}
+[data-theme="dark"] .outline-warning-warn {
+  background: #3a2f17; color: #f0b24c; border-color: #5c4a1e;
+}
+[data-theme="dark"] .outline-warning-danger {
+  background: #3a2326; color: #f06864; border-color: #5c2a2a;
 }
 
 /* ---------------- 修正对比视图 ---------------- */
