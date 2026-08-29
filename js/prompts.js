@@ -476,7 +476,10 @@
       "请据此生成大纲。"
     ].join("\n");
 
-    return { system: sys, messages: [{ role: "user", content: user }] };
+    // 每条章纲约100-200 token，按章节数给足输出空间，避免被默认4096上限截断
+    var n = chapterCount || 30;
+    var maxTokens = Math.min(Math.round(n * 300) + 1000, 32000);
+    return { system: sys, messages: [{ role: "user", content: user }], maxTokens: maxTokens };
   }
 
   // ---------------- 4. 章节正文生成（SKILL 阶段4 + 字数策略）----------------
@@ -627,7 +630,8 @@
       "  第N章 [标题] - [核心事件] " + profile.outlinePerChapter,
       "  ...",
       "",
-      "请从第" + opts.startCh + "章开始，生成 " + opts.count + " 章的大纲。"
+      "请从第" + opts.startCh + "章开始，生成 " + opts.count + " 章的大纲。",
+      "【硬性要求】必须完整输出全部 " + opts.count + " 章（第" + opts.startCh + "章到第" + (opts.startCh + opts.count - 1) + "章），一章一列，不得省略、不得用省略号代替、不得提前停止。"
     ].join("\n");
 
     var userParts = [];
@@ -637,7 +641,9 @@
     if (opts.recentChapters) userParts.push("【最近章节摘要（实际剧情进展）】\n" + opts.recentChapters);
     userParts.push("请基于以上信息，续写第" + opts.startCh + "-" + (opts.startCh + opts.count - 1) + "章的大纲。");
 
-    return { system: sys, messages: [{ role: "user", content: userParts.join("\n\n") }] };
+    // 每条章纲约100-200 token，按章节数给足输出空间，避免被默认4096上限截断
+    var maxTokens = Math.min(Math.round(opts.count * 300) + 1000, 32000);
+    return { system: sys, messages: [{ role: "user", content: userParts.join("\n\n") }], maxTokens: maxTokens };
   }
 
   // ---------------- 工具 ----------------
