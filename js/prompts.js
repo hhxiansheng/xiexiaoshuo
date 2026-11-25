@@ -657,7 +657,13 @@
     if (!text) return 0;
     // 统计非内容字符数（markdown标题行、空白、标点），用 match 计数比 replace 创建新串快
     var junk = text.match(/^#.*$|[\s，。！？、；：""''《》（）()\[\]【】\-—…·~`*_,.;:!?'"<>/\\]/gm);
-    return text.length - (junk ? junk.length : 0);
+    if (!junk) return text.length;
+    // 注意：必须累加每段匹配的字符长度，不能直接用 junk.length。
+    // junk.length 是「匹配次数」，当 ^#.*$ 一次吞掉整行标题（多个字符）时
+    // 按次数扣除会漏扣，导致标题被计入正文字数。
+    var junkChars = 0;
+    for (var i = 0; i < junk.length; i++) junkChars += junk[i].length;
+    return text.length - junkChars;
   }
 
   NS.prompts = {

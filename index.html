@@ -29,6 +29,7 @@
       <div id="treeStats" class="sidebar-stats"></div>
       <div class="sidebar-foot">
         <button class="btn btn-sm" data-nav="wizard">🆕 新书向导</button>
+        <button class="btn btn-sm" data-nav="importer">📥 导入设定</button>
         <button class="btn btn-sm" data-nav="editor">📖 写作</button>
         <button class="btn btn-sm" data-nav="settings-center">⚙️ 设定</button>
         <button class="btn btn-sm" data-nav="check">✅ 检查</button>
@@ -61,8 +62,10 @@
           </div>
           <div class="card">
             <div class="card-title">已有作品 / 开始新书</div>
-            <p class="hint" style="margin-bottom:14px">选择文件夹后，若该文件夹已有设定/大纲，会自动载入；否则进入新书向导。</p>
+            <p class="hint" style="margin-bottom:14px">选择文件夹后，若该文件夹已有设定/大纲，会自动载入；否则进入新书向导。<br>
+              已经写好设定总纲？可以直接导入，自动生成世界观、金手指、人物与大纲。</p>
             <button id="btnNewBook" class="btn">🆕 进入新书向导</button>
+            <button id="btnGoImport" class="btn btn-primary" style="margin-left:10px">📥 导入小说设定</button>
           </div>
           <div class="card">
             <div class="card-title">使用流程</div>
@@ -84,26 +87,64 @@
 
           <div class="card">
             <div class="field">
+              <label>模型厂商</label>
+              <select id="cfgProvider"></select>
+              <div class="hint" id="cfgProviderHint"></div>
+            </div>
+
+            <div class="field">
               <label>API Base URL</label>
               <input id="cfgBaseUrl" type="text" placeholder="https://api.deepseek.com/v1">
-              <div class="hint">DeepSeek: <code>https://api.deepseek.com/v1</code> ｜ OpenAI: <code>https://api.openai.com/v1</code></div>
+              <div class="hint" id="cfgBaseUrlHint">使用预设端点，一般无需修改</div>
             </div>
             <div class="field">
               <label>API Key</label>
-              <input id="cfgApiKey" type="password" placeholder="sk-...">
+              <div style="display:flex;gap:8px">
+                <input id="cfgApiKey" type="password" placeholder="sk-..." style="flex:1">
+                <button id="btnToggleKey" class="btn btn-sm" type="button">👁️ 显示</button>
+              </div>
+              <div class="hint" id="cfgKeyHint" style="display:none">该厂商为本地服务，无需填写 Key</div>
+            </div>
+            <div class="field">
+              <label>模型名</label>
+              <input id="cfgModel" type="text" placeholder="填写或从下方选择">
+              <div id="cfgModelChips" class="model-chips"></div>
+              <div style="margin-top:8px">
+                <button id="btnFetchModels" class="btn btn-sm">🔄 从服务端拉取模型列表</button>
+              </div>
             </div>
             <div class="row-2">
               <div class="field">
-                <label>模型名</label>
-                <input id="cfgModel" type="text" placeholder="deepseek-chat / gpt-4o-mini ...">
-              </div>
-              <div class="field">
-                <label>温度（创造性 0-1.5）</label>
+                <label>温度（创造性）</label>
                 <input id="cfgTemp" type="number" step="0.05" min="0" max="2">
                 <div class="hint">小说创作建议 0.8 - 1.0</div>
               </div>
+              <div class="field">
+                <label>单次最大输出 tokens</label>
+                <input id="cfgMaxTokens" type="number" step="512" min="256">
+                <div class="hint" id="cfgMaxTokensHint"></div>
+              </div>
             </div>
-            <div class="field">
+
+            <details class="advanced-opts">
+              <summary>高级选项</summary>
+              <div style="padding-top:12px">
+                <div class="field">
+                  <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input id="cfgOmitTemp" type="checkbox" style="width:auto">
+                    不发送 temperature 参数
+                  </label>
+                  <div class="hint" style="margin-left:26px">o1/o3、deepseek-reasoner 等推理模型不支持该参数，勾选可避免报错</div>
+                </div>
+                <div class="field">
+                  <label>自定义请求头（JSON，可选）</label>
+                  <textarea id="cfgExtraHeaders" rows="3" placeholder='{"HTTP-Referer": "https://your-site.com"}' style="font-family:monospace;font-size:12px"></textarea>
+                  <div class="hint">OpenRouter 等平台需要额外请求头时可在此补充</div>
+                </div>
+              </div>
+            </details>
+
+            <div class="field" style="margin-top:16px">
               <label>目标平台（影响字数与节奏）</label>
               <select id="cfgPlatform">
                 <option value="fanqian">番茄小说（2000-3000字/章，节奏快）</option>
@@ -346,6 +387,111 @@
         </div>
       </section>
 
+      <!-- ============ 导入小说设定 ============ -->
+      <section id="view-importer" class="view">
+        <div class="view-narrow">
+          <h1>📥 导入小说设定</h1>
+          <p class="subtitle">上传一份结构化的创作总纲（Markdown），自动解析出世界观、核心设定、人物、反派、伏笔与卷结构，并直接写入作品文件夹。</p>
+
+          <div id="impNoRoot" class="card" style="border-color:var(--warning);display:none">
+            <div class="card-title">⚠️ 还没有选择作品文件夹</div>
+            <p class="hint" style="margin-bottom:12px">导入会把设定写成 md 文件，需要先指定一个本地文件夹。</p>
+            <button id="impGoHome" class="btn btn-primary">🏠 去首页选择文件夹</button>
+          </div>
+
+          <!-- 上传区 -->
+          <div class="card">
+            <div class="card-title">第一步：上传设定文件</div>
+            <div id="impDropZone" class="drop-zone">
+              <div style="font-size:34px">📄</div>
+              <div id="impDropTitle" style="font-weight:600;margin-top:8px">点击选择或拖入 .md 文件</div>
+              <div class="hint" style="margin-top:4px">支持按「一、小说基本信息 / 二、核心世界观 / 五、金手指系统 / 九、全书总纲」这类结构编写的文档</div>
+            </div>
+            <input id="impFileInput" type="file" accept=".md,.txt,.markdown" style="display:none">
+            <div style="margin-top:12px;display:flex;gap:8px">
+              <button id="impPickFile" class="btn">📂 选择文件</button>
+              <button id="impClear" class="btn" style="display:none">🗑️ 清空</button>
+            </div>
+          </div>
+
+          <!-- 解析结果 -->
+          <div id="impResult" style="display:none">
+            <div class="card">
+              <div class="card-title">解析结果</div>
+              <table class="check-table" style="margin-bottom:14px">
+                <tbody id="impMetaBody"></tbody>
+              </table>
+              <div id="impWarnings" style="display:none" class="card"></div>
+              <div class="card-title" style="margin-top:6px">将生成的设定文件</div>
+              <table class="check-table">
+                <thead><tr><th>文件名</th><th style="width:90px">大小</th><th>内容预览</th></tr></thead>
+                <tbody id="impFilesBody"></tbody>
+              </table>
+            </div>
+
+            <div id="impVolumeCard" class="card" style="display:none">
+              <div class="card-title">卷结构</div>
+              <div style="max-height:260px;overflow-y:auto">
+                <table class="check-table">
+                  <thead><tr><th style="width:70px">卷</th><th>卷名</th><th style="width:110px">章节</th></tr></thead>
+                  <tbody id="impVolumeBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 导入选项 -->
+            <div class="card">
+              <div class="card-title">第二步：选择导入方式</div>
+
+              <div class="field">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input id="impOptFiles" type="checkbox" checked style="width:auto">
+                  写入全部设定文件（世界观/金手指/人物/反派/伏笔等）
+                </label>
+              </div>
+
+              <div class="field">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input id="impOptMeta" type="checkbox" checked style="width:auto">
+                  应用书名、类型、目标字数
+                </label>
+              </div>
+
+              <div class="field">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input id="impOptVolume" type="checkbox" checked style="width:auto">
+                  <span>应用卷结构配置</span>
+                </label>
+                <div id="impVolumeHint" class="hint" style="margin-left:26px"></div>
+              </div>
+
+              <div class="field">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                  <input id="impOptExpand" type="checkbox" style="width:auto">
+                  用 AI 展开成章级大纲（推荐）
+                </label>
+                <div class="hint" style="margin-left:26px">卷级总纲只有卷名和内容列表，写作需要「第X章 标题 - 详情」形式的章级大纲。勾选后会调用 AI 逐卷展开。</div>
+              </div>
+
+              <div id="impExpandRow" class="field" style="margin-left:26px;display:none">
+                <label>展开前几卷</label>
+                <input id="impExpandVolumes" type="number" value="1" min="1" style="width:auto">
+                <div id="impExpandHint" class="hint"></div>
+              </div>
+
+              <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+                <button id="impStart" class="btn btn-primary btn-lg">📥 开始导入</button>
+                <span id="impStatus" class="hint"></span>
+              </div>
+
+              <div id="impLog" class="card" style="margin-top:14px;background:var(--bg-soft);display:none">
+                <div id="impLogBody" style="font-family:monospace;font-size:12px;line-height:1.8;color:var(--text-soft)"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- ============ 质量检查 ============ -->
       <section id="view-check" class="view">
         <div class="view-narrow">
@@ -365,11 +511,15 @@
   <div id="toastWrap" class="toast-wrap"></div>
 
   <!-- 脚本：注意加载顺序，依赖在前 -->
-  <script src="js/config.js?v=12"></script>
-  <script src="js/fs.js?v=12"></script>
-  <script src="js/ai.js?v=12"></script>
-  <script src="js/prompts.js?v=12"></script>
-  <script src="js/store.js?v=12"></script>
-  <script src="js/app.js?v=12"></script>
+  <script src="js/config.js?v=15"></script>
+  <script src="js/fs.js?v=15"></script>
+  <script src="js/http.js?v=15"></script>
+  <script src="js/providers.js?v=15"></script>
+  <script src="js/ai.js?v=15"></script>
+  <script src="js/prompts.js?v=15"></script>
+  <script src="js/setting-parser.js?v=15"></script>
+  <script src="js/importer.js?v=15"></script>
+  <script src="js/store.js?v=15"></script>
+  <script src="js/app.js?v=15"></script>
 </body>
 </html>

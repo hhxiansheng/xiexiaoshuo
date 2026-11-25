@@ -66,17 +66,21 @@
       var raw = line.replace(/^\s+/, "");           // 去行首缩进
       if (!raw) return;
 
-      // 卷行（含"第X卷"且不含"章"）
+      // 卷行：「第X卷：卷名（a—b章）」
+      // 注意：不能简单用 /章/ 判断，因为卷标题里的章节区间（如「(1-25章)」）
+      // 本身含「章」字，会导致卷名永远识别不到。
+      // 正确做法是：含「第X卷」且不含「第X章」章节标记。
       var vm = raw.match(/第([0-9一二三四五六七八九十百零]+)卷/);
-      if (vm && !/章/.test(raw)) {
+      var hasChapterMarker = /第[0-9一二三四五六七八九十百零]+章/.test(raw);
+      if (vm && !hasChapterMarker) {
         // 去掉 markdown 前缀和章节数括号，提取卷名
-        var vname = raw
+        currentVolume = raw
           .replace(/^[*#\-\s]*/, "")
           .replace(/第[0-9一二三四五六七八九十百零]+卷\s*[:：、]?\s*/, "")
           .replace(/[（(].*$/, "")
           .replace(/[\[\]【】""''《》]/g, "")
+          .replace(/[:：、\s]+$/, "")
           .trim();
-        currentVolume = vname;
         return;
       }
 
@@ -122,7 +126,17 @@
     return parseInt(s, 10) || 0;
   }
 
-  // 章节号 → 所属卷目录名 "第一卷-[卷名](1-10章)"
+  // 章节号 → 所属卷目录名 "第一卷-[卷名](1-25章)"
+  // 每卷章数可配置（默认 10），支持 20卷×25章 这类结构
+  var CHAPTERS_PER_VOLUME = 10;
+
+  function setChaptersPerVolume(n) {
+    var v = parseInt(n, 10);
+    if (v > 0) CHAPTERS_PER_VOLUME = v;
+  }
+
+  function getChaptersPerVolume() { return CHAPTERS_PER_VOLUME; }
+
   function volumeDirForChapter(chNo, outlineText) {
     var vols = parseOutlineChapters(outlineText);
     var ch;
@@ -130,9 +144,9 @@
       if (vols[i].num === chNo) { ch = vols[i]; break; }
     }
     var volName = ch && ch.volume ? ch.volume : "默认";
-    var volIndex = ch ? Math.ceil(chNo / 10) : Math.ceil(chNo / 10);
-    var start = (volIndex - 1) * 10 + 1;
-    var end = volIndex * 10;
+    var volIndex = Math.ceil(chNo / CHAPTERS_PER_VOLUME);
+    var start = (volIndex - 1) * CHAPTERS_PER_VOLUME + 1;
+    var end = volIndex * CHAPTERS_PER_VOLUME;
     return "第" + toChineseNum(volIndex) + "卷-[" + volName + "](" + start + "-" + end + "章)";
   }
 
@@ -193,7 +207,7 @@
       // 更新进度
       if (opts.isNew !== false && chNo > state.progress.finishedChapter) {
         state.progress.finishedChapter = chNo;
-        state.progress.currentVolume = Math.ceil(chNo / 10);
+        state.progress.currentVolume = Math.ceil(chNo / CHAPTERS_PER_VOLUME);
       }
       // 重新扫描获取准确总字数（直接累加会导致每次保存都重复计入）
       return recomputeProgress().then(function () { return content; });
@@ -211,7 +225,8 @@
       NW.fs.readFile(SETTING_DIR, "世界观.md"),
       NW.fs.readFile(SETTING_DIR, "大纲.md"),
       NW.fs.readFile(SETTING_DIR, "目标字数.txt"),
-      NW.fs.readFile(SETTING_DIR, "类型.txt")
+      NW.fs.readFile(SETTING_DIR, "类型.txt"),
+      NW.fs.readFile(SETTING_DIR, "作品配置.json")
     ]).then(function (arr) {
       state.requirement = arr[0] || "";
       state.goldenFinger = arr[1] || "";
@@ -219,6 +234,15 @@
       state.outline = arr[3] || "";
       state.targetWords = parseInt(arr[4], 10) || 0;
       state.genre = arr[5] || "xuanhuan";
+      // 读取作品结构配置（每卷章数）
+      try {
+        var cfg = arr[6] ? JSON.parse(arr[6]) : null;
+        if (cfg && cfg.chaptersPerVolume > 0) {
+          setChaptersPerVolume(cfg.chaptersPerVolume);
+        }
+      } catch (e) {
+        // 配置损坏时保持默认值
+      }
       // 从已存在章节统计进度
       return recomputeProgress();
     }).then(function () {
@@ -258,7 +282,7 @@
         });
         return readChain.then(function () {
           state.progress.finishedChapter = maxCh;
-          state.progress.currentVolume = Math.ceil((maxCh || 1) / 10);
+          state.progress.currentVolume = Math.ceil((maxCh || 1) / CHAPTERS_PER_VOLUME);
           state.progress.totalWords = totalW;
           return state;
         });
@@ -304,6 +328,8 @@
     cnToArab: cnToArab,
     parseOutlineChapters: parseOutlineChapters,
     volumeDirForChapter: volumeDirForChapter,
+    setChaptersPerVolume: setChaptersPerVolume,
+    getChaptersPerVolume: getChaptersPerVolume,
     chapterFileName: chapterFileName,
     saveRequirement: saveRequirement,
     saveGenre: saveGenre,

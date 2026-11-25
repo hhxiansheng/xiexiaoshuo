@@ -1,61 +1,50 @@
 /* ============================================================
-   ai.js - OpenAI 兼容大模型客户端
+   ai.js - 多协议大模型客户端
    挂在全局命名空间 NW.ai
-   功能：
-   - 非流式 chat completion
-   - 流式 chat completion（SSE 解析，逐 token 回调）
-   - 测试连接
-   适配 DeepSeek / OpenAI / 通义千问(兼容模式) 等任意 OpenAI 兼容服务
+
+   支持三大协议族（由 js/providers.js 决定）：
+   - OpenAI 兼容：DeepSeek / Kimi / GLM / 通义 / 豆包 / 硅基流动 / OpenAI / Groq / OpenRouter / Ollama…
+   - Anthropic Messages API：Claude 全系
+   - Google Gemini API：Gemini 全系
+
+   对外接口保持不变：chat / chatStream / testConnection
    ============================================================ */
 (function (global) {
   "use strict";
 
   var NS = global.NW = global.NW || {};
 
-  // 规范化 base url，保证以 /chat/completions 结尾
-  function buildUrl(baseUrl) {
-    var u = (baseUrl || "").replace(/\/+$/, "");
-    if (/\/chat\/completions$/.test(u)) return u;
-    if (/\/v\d+$/.test(u)) return u + "/chat/completions";
-    return u + "/v1/chat/completions";
-  }
-
-  function buildHeaders(apiKey) {
-    return {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + (apiKey || "")
-    };
+  function currentProvider(cfg) {
+    return NS.providers.getProvider(cfg.providerId || NS.providers.DEFAULT_PROVIDER_ID);
   }
 
   /**
    * 非流式对话
    * @param {Object} opts { system, messages:[{role,content}], temperature?, maxTokens? }
-   * @returns {Promise<string>} 助手回复文本
+   * @returns {Promise<string>}
    */
   function chat(opts) {
     var cfg = NS.config.load();
-    var payload = {
-      model: cfg.model,
-      messages: []
-    };
-    if (opts.system) payload.messages.push({ role: "system", content: opts.system });
-    (opts.messages || []).forEach(function (m) { payload.messages.push(m); });
-    payload.temperature = opts.temperature != null ? opts.temperature : cfg.temperature;
-    payload.max_tokens = opts.maxTokens != null ? opts.maxTokens : cfg.maxTokens;
-    payload.stream = false;
+    var provider = currentProvider(cfg);
+    var url = NS.providers.buildEndpoint(provider, cfg);
+    var headers = NS.providers.buildHeaders(provider, cfg);
+    var body = NS.providers.buildBody(provider, cfg, opts, false);
 
-    return fetch(buildUrl(cfg.baseUrl), {
+    return NS.http.apiFetch(url, {
       method: "POST",
-      headers: buildHeaders(cfg.apiKey),
-      body: JSON.stringify(payload)
+      headers: headers,
+      body: JSON.stringify(body)
     }).then(function (res) {
-      if (!res.ok) return res.text().then(function (t) {
-        throw new Error("API 错误 (" + res.status + "): " + sliceErr(t));
-      });
+      if (!res.ok) {
+        return res.text().then(function (t) {
+          throw new Error(formatError(res.status, t));
+        });
+      }
       return res.json();
-    }).then(function (data) {
-      var txt = data && data.choices && data.choices[0] && data.choices[0].message &&
-                data.choices[0].message.content;
+    }).then(function (json) {
+      var txt = NS.providers.extractText(provider, json);
+      var errMsg = NS.providers.extractError(json);
+      if (!txt && errMsg) throw new Error(errMsg);
       return txt || "";
     });
   }
@@ -63,69 +52,89 @@
   /**
    * 流式对话
    * @param {Object} opts 同 chat
-   * @param {Function} onToken  回调 (deltaText, fullText)
-   * @param {Object}   signal   AbortSignal，用于中断
-   * @returns {Promise<string>} 完整文本
+   * @param {Function} onToken (deltaText, fullText)
+   * @param {Object} signal AbortSignal
+   * @returns {Promise<string>}
    */
   function chatStream(opts, onToken, signal) {
     var cfg = NS.config.load();
-    var payload = {
-      model: cfg.model,
-      messages: [],
-      stream: true
-    };
-    if (opts.system) payload.messages.push({ role: "system", content: opts.system });
-    (opts.messages || []).forEach(function (m) { payload.messages.push(m); });
-    payload.temperature = opts.temperature != null ? opts.temperature : cfg.temperature;
-    payload.max_tokens = opts.maxTokens != null ? opts.maxTokens : cfg.maxTokens;
+    var provider = currentProvider(cfg);
+    var url = NS.providers.buildStreamEndpoint(provider, cfg);
+    var headers = NS.providers.buildHeaders(provider, cfg);
+    var body = NS.providers.buildBody(provider, cfg, opts, true);
 
-    return fetch(buildUrl(cfg.baseUrl), {
+    return NS.http.apiFetch(url, {
       method: "POST",
-      headers: buildHeaders(cfg.apiKey),
-      body: JSON.stringify(payload),
+      headers: headers,
+      body: JSON.stringify(body),
       signal: signal
     }).then(function (res) {
-      if (!res.ok || !res.body) {
+      if (!res.ok) {
         return res.text().then(function (t) {
-          throw new Error("API 错误 (" + res.status + "): " + sliceErr(t));
+          throw new Error(formatError(res.status, t));
         });
       }
-      return readSSE(res.body, onToken);
+      if (!res.body) {
+        return res.json().then(function (json) {
+          var txt = NS.providers.extractText(provider, json);
+          if (txt && onToken) onToken(txt, txt);
+          return txt;
+        });
+      }
+      return readSSE(res.body, provider, onToken);
     });
   }
 
   // 解析 SSE 流
-  function readSSE(body, onToken) {
+  function readSSE(body, provider, onToken) {
     var reader = body.getReader();
     var decoder = new TextDecoder("utf-8");
     var buffer = "";
     var full = "";
+    var isGoogle = provider.protocol === NS.providers.PROTOCOLS.GOOGLE;
 
     function pump() {
       return reader.read().then(function (chunk) {
         if (chunk.done) return full;
         buffer += decoder.decode(chunk.value, { stream: true });
 
-        // 按 SSE 事件分割
         var lines = buffer.split("\n");
-        buffer = lines.pop(); // 保留最后不完整的一行
+        buffer = lines.pop();
 
         for (var i = 0; i < lines.length; i++) {
           var line = lines[i].trim();
           if (!line) continue;
           if (line.indexOf("data:") !== 0) continue;
+
           var data = line.slice(5).trim();
+          if (!data) continue;
           if (data === "[DONE]") return full;
+
+          var json;
           try {
-            var json = JSON.parse(data);
-            var delta = json.choices && json.choices[0] && json.choices[0].delta &&
-                        json.choices[0].delta.content;
-            if (delta) {
-              full += delta;
-              if (onToken) onToken(delta, full);
-            }
+            json = JSON.parse(data);
           } catch (e) {
-            // 忽略解析错误（如心跳/注释）
+            continue; // 心跳/注释
+          }
+
+          var errMsg = NS.providers.extractError(json);
+          if (errMsg && !NS.providers.extractDelta(provider, json)) {
+            throw new Error(errMsg);
+          }
+
+          if (isGoogle && json.candidates && json.candidates[0]) {
+            var fr = json.candidates[0].finishReason;
+            if (fr && fr !== "STOP" && fr !== "MAX_TOKENS") {
+              if (!NS.providers.extractDelta(provider, json)) {
+                throw new Error("Gemini 中断生成：" + fr);
+              }
+            }
+          }
+
+          var delta = NS.providers.extractDelta(provider, json);
+          if (delta) {
+            full += delta;
+            if (onToken) onToken(delta, full);
           }
         }
         return pump();
@@ -138,22 +147,96 @@
   function testConnection() {
     return chat({
       system: "你是一个测试助手。",
-      messages: [{ role: "user", content: "请回复：连接成功" }],
-      maxTokens: 20
+      messages: [{ role: "user", content: "请只回复四个字：连接成功" }],
+      maxTokens: 32
     }).then(function (txt) {
       return { ok: true, reply: txt };
     });
   }
 
+  // 列出可用模型（部分厂商支持 /models）
+  function listModels() {
+    var cfg = NS.config.load();
+    var provider = currentProvider(cfg);
+    var url;
+
+    if (provider.protocol === NS.providers.PROTOCOLS.GOOGLE) {
+      url = String(cfg.baseUrl || provider.baseUrl).replace(/\/+$/, "") + "/models";
+    } else if (provider.protocol === NS.providers.PROTOCOLS.ANTHROPIC) {
+      return Promise.reject(new Error("该厂商不支持自动拉取模型列表，请手动填写模型名"));
+    } else {
+      var base = String(cfg.baseUrl || provider.baseUrl).replace(/\/+$/, "");
+      url = base + "/models";
+    }
+
+    var headers = NS.providers.buildHeaders(provider, cfg);
+
+    return NS.http.apiFetch(url, { method: "GET", headers: headers }).then(function (res) {
+      if (!res.ok) {
+        return res.text().then(function (t) {
+          throw new Error(formatError(res.status, t));
+        });
+      }
+      return res.json();
+    }).then(function (json) {
+      if (json.data && Array.isArray(json.data)) {
+        return json.data.map(function (m) { return m.id || m.name; }).filter(Boolean);
+      }
+      if (json.models && Array.isArray(json.models)) {
+        return json.models.map(function (m) { return m.name || m.id; }).filter(Boolean);
+      }
+      return [];
+    });
+  }
+
+  function formatError(status, bodyText) {
+    var detail = sliceErr(bodyText);
+    var hint = statusHint(status, bodyText);
+    return "API 错误 (" + status + ")" + (hint ? "：" + hint : "") + (detail ? "\n" + detail : "");
+  }
+
+  function statusHint(status, bodyText) {
+    var raw = String(bodyText || "");
+
+    // 先看服务端返回的具体错误类型，能给出更精准的提示
+    if (/MissingSessionID/i.test(raw)) {
+      return "服务端要求 x-opencode-session 头。已为 OpenCode Go 自动注入，若仍报错请确认厂商选择正确";
+    }
+    if (/authentication_error|Invalid credential|invalid_api_key/i.test(raw)) {
+      return "API Key 无效，请检查是否填错或已过期";
+    }
+    if (/model.*not.*(found|exist)|invalid.*model/i.test(raw)) {
+      return "模型名不存在，请检查拼写";
+    }
+    if (/insufficient.*(quota|balance)|余额不足/i.test(raw)) {
+      return "账户余额或额度不足";
+    }
+
+    switch (status) {
+      case 400: return "请求参数有误，请检查模型名是否正确";
+      case 401: return "API Key 无效或未填写";
+      case 403: return "API Key 无权访问该模型";
+      case 404: return "端点或模型不存在，请检查 Base URL";
+      case 405: return "该路径不支持此请求方法，请检查 Base URL 是否写错（例如少了或多了 /zen）";
+      case 413: return "请求体过大，请减少大纲/上下文字数";
+      case 429: return "请求频率或额度超限，请稍后再试";
+      case 500:
+      case 502:
+      case 503: return "服务端错误，请稍后重试";
+      default: return "";
+    }
+  }
+
   function sliceErr(t) {
     if (!t) return "";
-    if (t.length > 300) t = t.slice(0, 300);
-    return t;
+    var s = String(t);
+    return s.length > 400 ? (s.slice(0, 400) + "…") : s;
   }
 
   NS.ai = {
     chat: chat,
     chatStream: chatStream,
-    testConnection: testConnection
+    testConnection: testConnection,
+    listModels: listModels
   };
 })(window);

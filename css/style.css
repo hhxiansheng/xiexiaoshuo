@@ -372,6 +372,43 @@ table.check-table { width: 100%; border-collapse: collapse; font-size: 13px; }
 .badge-warn { background: var(--warning-soft); color: var(--warning); }
 .badge-err { background: var(--danger-soft); color: var(--danger); }
 
+/* ---------------- AI 设置：模型快捷选择 ---------------- */
+.model-chips {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+.model-chip {
+  padding: 3px 10px; border: 1px solid var(--border); border-radius: 12px;
+  font-size: 12px; cursor: pointer; color: var(--text-soft);
+  transition: all .12s; user-select: none;
+}
+.model-chip:hover { border-color: var(--primary); color: var(--primary); }
+.model-chip.active {
+  background: var(--primary-soft); border-color: var(--primary);
+  color: var(--primary); font-weight: 600;
+}
+.advanced-opts {
+  margin: 12px 0; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 14px;
+}
+.advanced-opts summary {
+  cursor: pointer; font-weight: 600; font-size: 13px;
+  color: var(--text-soft); user-select: none;
+}
+
+/* ---------------- 导入设定 ---------------- */
+.drop-zone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 30px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all .15s;
+}
+.drop-zone:hover, .drop-zone.dragging {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
 /* ---------------- 提示/Toast ---------------- */
 .toast-wrap {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);

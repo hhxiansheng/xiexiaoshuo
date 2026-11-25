@@ -125,6 +125,10 @@
       bindTopbar();
       log("init: bindHome");
       bindHome();
+      log("init: bindNav");
+      bindNav();
+      log("init: bindImporter");
+      bindImporter();
       log("init: bindSettings");
       bindSettings();
       log("init: bindWizard");
@@ -227,6 +231,12 @@
       NS.store.reset();
       showView("wizard");
     });
+
+    var goImport = $("#btnGoImport");
+    if (goImport) goImport.addEventListener("click", function () {
+      showView("importer");
+      renderImportView();
+    });
   }
 
   function restoreAndLoad() {
@@ -259,41 +269,442 @@
         if (b.dataset.nav === "editor" && !ensureFolder()) return;
         if (b.dataset.nav === "settings-center" && !ensureFolder()) return;
         if (b.dataset.nav === "check" && !ensureFolder()) return;
+        // 导入页允许在未选文件夹时进入，页面内会提示去首页
         showView(b.dataset.nav);
         if (b.dataset.nav === "editor") refreshTree();
         if (b.dataset.nav === "check") renderCheckTable();
+        if (b.dataset.nav === "importer") renderImportView();
       });
     });
   }
 
+  // ==================== 导入设定 ====================
+  function bindImporter() {
+    var dropZone = $("#impDropZone");
+    var fileInput = $("#impFileInput");
+
+    function pickFiles() { if (fileInput) fileInput.click(); }
+
+    if (dropZone) {
+      dropZone.addEventListener("click", pickFiles);
+      dropZone.addEventListener("dragover", function (e) {
+        e.preventDefault();
+        dropZone.classList.add("dragging");
+      });
+      dropZone.addEventListener("dragleave", function () {
+        dropZone.classList.remove("dragging");
+      });
+      dropZone.addEventListener("drop", function (e) {
+        e.preventDefault();
+        dropZone.classList.remove("dragging");
+        var files = e.dataTransfer && e.dataTransfer.files;
+        if (files && files[0]) handleFile(files[0]);
+      });
+    }
+    if (fileInput) {
+      fileInput.addEventListener("change", function () {
+        if (fileInput.files && fileInput.files[0]) handleFile(fileInput.files[0]);
+        fileInput.value = "";
+      });
+    }
+    if ($("#impPickFile")) $("#impPickFile").addEventListener("click", pickFiles);
+    if ($("#impClear")) $("#impClear").addEventListener("click", function () {
+      NS.importer.reset();
+      renderImportView();
+    });
+    if ($("#impGoHome")) $("#impGoHome").addEventListener("click", function () {
+      showView("home");
+    });
+
+    // 选项
+    if ($("#impOptFiles")) $("#impOptFiles").addEventListener("change", function (e) {
+      NS.importer.getOptions().writeFiles = e.target.checked;
+    });
+    if ($("#impOptMeta")) $("#impOptMeta").addEventListener("change", function (e) {
+      NS.importer.getOptions().applyMeta = e.target.checked;
+    });
+    if ($("#impOptVolume")) $("#impOptVolume").addEventListener("change", function (e) {
+      NS.importer.getOptions().applyVolumeConfig = e.target.checked;
+    });
+    if ($("#impOptExpand")) $("#impOptExpand").addEventListener("change", function (e) {
+      NS.importer.getOptions().expandChapterOutlines = e.target.checked;
+      var row = $("#impExpandRow");
+      if (row) row.style.display = e.target.checked ? "" : "none";
+    });
+    if ($("#impExpandVolumes")) $("#impExpandVolumes").addEventListener("change", function (e) {
+      NS.importer.getOptions().expandVolumes = parseInt(e.target.value, 10) || 1;
+    });
+
+    if ($("#impStart")) $("#impStart").addEventListener("click", doImport);
+  }
+
+  function handleFile(file) {
+    if (!/\.(md|txt|markdown)$/i.test(file.name)) {
+      toast("请选择 .md 或 .txt 文件", "err");
+      return;
+    }
+    NS.importer.readFromFile(file, function () {
+      toast("解析成功", "ok");
+      renderImportView();
+    }, function (e) {
+      toast("读取失败：" + (e.message || e), "err");
+    });
+  }
+
+  function esc2(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+
+  function renderImportView() {
+    var st = NS.importer.getState();
+    var p = st.parsed;
+
+    // 未选文件夹提示
+    var noRoot = $("#impNoRoot");
+    if (noRoot) noRoot.style.display = NS.fs.getRoot() ? "none" : "";
+
+    // 上传区标题
+    var title = $("#impDropTitle");
+    if (title) title.textContent = st.fileName || "点击选择或拖入 .md 文件";
+
+    var clearBtn = $("#impClear");
+    if (clearBtn) clearBtn.style.display = p ? "" : "none";
+
+    var resultBox = $("#impResult");
+    if (!resultBox) return;
+    if (!p) { resultBox.style.display = "none"; return; }
+    resultBox.style.display = "";
+
+    // 元信息
+    var metaBody = $("#impMetaBody");
+    if (metaBody) {
+      var m = p.meta;
+      var rows = [];
+      if (m.bookTitle) rows.push(["书名", esc2(m.bookTitle)]);
+      if (m.genreText) {
+        var g = NS.settingParser.guessGenre(m.genreText);
+        var label = (NS.prompts.GENRE_PROFILES[g] || {}).label || g;
+        rows.push(["类型", esc2(m.genreText) + " → " + esc2(label)]);
+      }
+      var words = NS.settingParser.parseWordCount(m.targetWordsText);
+      if (words) rows.push(["目标字数", esc2(m.targetWordsText) + "（" + words.toLocaleString() + " 字）"]);
+      var chs = NS.settingParser.cnNumToInt(m.totalChaptersText);
+      if (chs) rows.push(["总章节", chs + " 章"]);
+      var vols = NS.settingParser.cnNumToInt(m.totalVolumesText);
+      if (vols) rows.push(["总卷数", vols + " 卷"]);
+      if (m.protagonist) rows.push(["主角", esc2(m.protagonist)]);
+      if (m.goldenFingerName) rows.push(["核心设定", esc2(m.goldenFingerName)]);
+
+      var volHtml;
+      if (p.volumes.length) {
+        volHtml = "识别到 <b>" + p.volumes.length + "</b> 卷，每卷约 <b>" +
+          p.chaptersPerVolume + "</b> 章（" + p.volumes[0].start + "-" +
+          p.volumes[p.volumes.length - 1].end + " 章）";
+      } else {
+        volHtml = '<span style="color:var(--warning)">未识别到卷结构</span>';
+      }
+      rows.push(["卷结构", volHtml]);
+
+      metaBody.innerHTML = rows.map(function (r) {
+        return '<tr><td style="width:110px;color:var(--text-soft)">' + r[0] + "</td><td>" + r[1] + "</td></tr>";
+      }).join("");
+    }
+
+    // 警告
+    var warnBox = $("#impWarnings");
+    if (warnBox) {
+      if (p.warnings.length) {
+        warnBox.style.display = "";
+        warnBox.style.background = "var(--warning-soft)";
+        warnBox.style.borderColor = "var(--warning)";
+        warnBox.innerHTML = p.warnings.map(function (w) {
+          return '<div class="hint">⚠️ ' + esc2(w) + "</div>";
+        }).join("");
+      } else {
+        warnBox.style.display = "none";
+      }
+    }
+
+    // 文件列表
+    var filesBody = $("#impFilesBody");
+    if (filesBody) {
+      var names = Object.keys(p.files);
+      filesBody.innerHTML = names.map(function (n) {
+        var content = p.files[n];
+        var preview = content.slice(0, 120).replace(/\n/g, " ");
+        return "<tr><td><b>" + esc2(n) + "</b></td><td>" + content.length + " 字符</td>" +
+          '<td class="hint" style="max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' +
+          esc2(preview) + "</td></tr>";
+      }).join("");
+    }
+
+    // 卷结构
+    var volCard = $("#impVolumeCard");
+    var volBody = $("#impVolumeBody");
+    if (volCard && volBody) {
+      if (p.volumes.length) {
+        volCard.style.display = "";
+        volBody.innerHTML = p.volumes.map(function (v) {
+          return "<tr><td>第" + v.no + "卷</td><td>" + esc2(v.name) + '</td><td class="hint">' +
+            v.start + "-" + v.end + "</td></tr>";
+        }).join("");
+      } else {
+        volCard.style.display = "none";
+      }
+    }
+
+    // 卷配置提示
+    var vh = $("#impVolumeHint");
+    if (vh) {
+      var cur = NS.store.getChaptersPerVolume();
+      if (cur === p.chaptersPerVolume) {
+        vh.textContent = "当前作品设置：每卷 " + cur + " 章";
+      } else {
+        vh.innerHTML = "当前作品设置：每卷 " + cur + " 章 → " +
+          '<span style="color:var(--warning)">将被修改为 ' + p.chaptersPerVolume + " 章</span>";
+      }
+    }
+
+    var eh = $("#impExpandHint");
+    if (eh) eh.textContent = "共 " + p.volumes.length + " 卷。一次展开太多会很慢且耗 token，建议先展开 1-2 卷开始写。";
+
+    var ev = $("#impExpandVolumes");
+    if (ev) ev.max = p.volumes.length || 1;
+  }
+
+  function doImport() {
+    var btn = $("#impStart");
+    var statusEl = $("#impStatus");
+    var logBox = $("#impLog");
+    var logBody = $("#impLogBody");
+
+    if (!NS.fs.getRoot()) {
+      toast("请先到首页选择作品文件夹", "err");
+      return;
+    }
+
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 导入中…'; }
+    if (statusEl) statusEl.textContent = "";
+    if (logBox) logBox.style.display = "none";
+
+    // 进度轮询（AI 展开时更新日志）
+    var pollId = setInterval(function () {
+      var st = NS.importer.getState();
+      if (st.expanding || st.expandLog.length) {
+        if (logBox) logBox.style.display = "";
+        if (logBody) logBody.innerHTML = st.expandLog.map(function (l) { return esc2(l); }).join("<br>");
+        if (statusEl) {
+          if (st.expanding) {
+            statusEl.innerHTML = '<span class="spinner"></span> 正在展开 ' +
+              esc2(st.expandProgress.current || "…") +
+              "（" + st.expandProgress.done + "/" + st.expandProgress.total + "）";
+          }
+        }
+      }
+    }, 300);
+
+    NS.importer.runImport(function () {
+      clearInterval(pollId);
+      if (btn) { btn.disabled = false; btn.textContent = "📥 开始导入"; }
+      if (statusEl) statusEl.textContent = "";
+      toast("设定导入完成", "ok");
+      refreshTree();
+      refreshTopbar();
+      showView("settings-center");
+    }, function (e) {
+      clearInterval(pollId);
+      if (btn) { btn.disabled = false; btn.textContent = "📥 开始导入"; }
+      if (statusEl) statusEl.textContent = "";
+      toast("导入失败：" + (e.message || e), "err");
+    });
+  }
+
   // ==================== 设置 ====================
+  var cfgFetchedModels = [];
+
+  function renderProviderSelect(selectedId) {
+    var sel = $("#cfgProvider");
+    if (!sel) return;
+    var groups = NS.providers.getProvidersByGroup();
+    var html = "";
+    groups.forEach(function (g) {
+      html += '<optgroup label="' + esc2(g.label) + '">';
+      g.providers.forEach(function (p) {
+        html += '<option value="' + esc2(p.id) + '">' + esc2(p.name) + "</option>";
+      });
+      html += "</optgroup>";
+    });
+    sel.innerHTML = html;
+    sel.value = selectedId || NS.providers.DEFAULT_PROVIDER_ID;
+  }
+
+  function currentProviderForForm() {
+    var pid = $("#cfgProvider") ? $("#cfgProvider").value : NS.providers.DEFAULT_PROVIDER_ID;
+    return NS.providers.getProvider(pid);
+  }
+
+  function renderProviderHint() {
+    var p = currentProviderForForm();
+    var hint = $("#cfgProviderHint");
+    if (!hint) return;
+
+    var protoLabel = "OpenAI 兼容";
+    if (p.protocol === NS.providers.PROTOCOLS.ANTHROPIC) protoLabel = "Anthropic Messages API";
+    else if (p.protocol === NS.providers.PROTOCOLS.GOOGLE) protoLabel = "Google Gemini API";
+
+    var authLabel = "Authorization: Bearer";
+    if (p.authType === NS.providers.AUTH_TYPES.X_API_KEY) authLabel = "x-api-key 头";
+    else if (p.authType === NS.providers.AUTH_TYPES.API_KEY) authLabel = "api-key 头";
+    else if (p.authType === NS.providers.AUTH_TYPES.GOOGLE_KEY) authLabel = "x-goog-api-key 头";
+    else if (p.authType === NS.providers.AUTH_TYPES.NONE) authLabel = "无需鉴权";
+
+    var html = "协议：<b>" + esc2(protoLabel) + "</b> ｜ 鉴权：<b>" + esc2(authLabel) + "</b>";
+    if (p.requiresSession) {
+      html += "<br>会话头：<b>x-opencode-session</b>（已自动注入）";
+    }
+    if (p.corsBlocked) {
+      html += '<br><span style="color:var(--warning)">⚠️ 该服务不开放浏览器跨域，会自动通过本地代理转发</span>';
+    }
+    if (p.note) html += "<br>" + esc2(p.note);
+    hint.innerHTML = html;
+
+    // Key 提示
+    var keyHint = $("#cfgKeyHint");
+    if (keyHint) keyHint.style.display = p.authType === NS.providers.AUTH_TYPES.NONE ? "" : "none";
+
+    // 温度上限
+    var tempInput = $("#cfgTemp");
+    if (tempInput) tempInput.max = p.tempMax || 2;
+
+    // 输出上限提示
+    var mtHint = $("#cfgMaxTokensHint");
+    if (mtHint) mtHint.textContent = "上限 " + p.maxOutput + "，超出会自动裁剪";
+
+    // Base URL 提示
+    var buHint = $("#cfgBaseUrlHint");
+    if (buHint) {
+      buHint.textContent = p.id === "custom"
+        ? "填到版本号即可，如 https://api.example.com/v1；也可直接填完整的 /chat/completions 地址"
+        : "使用预设端点，一般无需修改";
+    }
+
+    renderModelChips();
+  }
+
+  function renderModelChips() {
+    var box = $("#cfgModelChips");
+    if (!box) return;
+    var p = currentProviderForForm();
+    var list = (p.models || []).concat(cfgFetchedModels);
+    // 去重
+    var seen = {}, uniq = [];
+    list.forEach(function (m) { if (m && !seen[m]) { seen[m] = 1; uniq.push(m); } });
+
+    var current = $("#cfgModel") ? $("#cfgModel").value : "";
+    box.innerHTML = uniq.map(function (m) {
+      return '<span class="model-chip' + (m === current ? " active" : "") +
+        '" data-model="' + esc2(m) + '">' + esc2(m) + "</span>";
+    }).join("");
+
+    $$("#cfgModelChips .model-chip").forEach(function (chip) {
+      chip.addEventListener("click", function () {
+        $("#cfgModel").value = chip.dataset.model;
+        renderModelChips();
+      });
+    });
+  }
+
+  function collectCfgPatch() {
+    var maxT = parseInt($("#cfgMaxTokens").value, 10);
+    return {
+      providerId: $("#cfgProvider").value,
+      baseUrl: $("#cfgBaseUrl").value.trim(),
+      apiKey: $("#cfgApiKey").value.trim(),
+      model: $("#cfgModel").value.trim(),
+      temperature: parseFloat($("#cfgTemp").value) || 0.85,
+      maxTokens: maxT > 0 ? maxT : 4096,
+      omitTemperature: $("#cfgOmitTemp").checked,
+      extraHeaders: $("#cfgExtraHeaders").value.trim(),
+      platform: $("#cfgPlatform").value
+    };
+  }
+
   function bindSettings() {
     var c = NS.config.load();
-    $("#cfgBaseUrl").value = c.baseUrl;
-    $("#cfgApiKey").value = c.apiKey;
-    $("#cfgModel").value = c.model;
+
+    // 老配置没有 providerId 时，按 baseUrl 猜一个
+    var pid = c.providerId;
+    if (!pid) {
+      var list = NS.providers.PROVIDERS;
+      for (var i = 0; i < list.length; i++) {
+        if (list[i].baseUrl && c.baseUrl && c.baseUrl.indexOf(list[i].baseUrl) === 0) {
+          pid = list[i].id;
+          break;
+        }
+      }
+      pid = pid || NS.providers.DEFAULT_PROVIDER_ID;
+    }
+
+    renderProviderSelect(pid);
+    $("#cfgBaseUrl").value = c.baseUrl || "";
+    $("#cfgApiKey").value = c.apiKey || "";
+    $("#cfgModel").value = c.model || "";
     $("#cfgTemp").value = c.temperature;
+    $("#cfgMaxTokens").value = c.maxTokens || 4096;
+    $("#cfgOmitTemp").checked = !!c.omitTemperature;
+    $("#cfgExtraHeaders").value = c.extraHeaders || "";
     $("#cfgPlatform").value = c.platform;
+    renderProviderHint();
+
+    // 切换厂商
+    $("#cfgProvider").addEventListener("change", function () {
+      var p = currentProviderForForm();
+      $("#cfgBaseUrl").value = p.baseUrl || "";
+      $("#cfgModel").value = (p.models && p.models[0]) || "";
+      $("#cfgTemp").value = Math.min(0.85, p.tempMax || 2);
+      $("#cfgTemp").max = p.tempMax || 2;
+      cfgFetchedModels = [];
+      renderProviderHint();
+    });
+
+    // 模型名手动改动时刷新 chip 高亮
+    $("#cfgModel").addEventListener("input", renderModelChips);
+
+    // 显示/隐藏 Key
+    var keyVisible = false;
+    $("#btnToggleKey").addEventListener("click", function () {
+      keyVisible = !keyVisible;
+      $("#cfgApiKey").type = keyVisible ? "text" : "password";
+      $("#btnToggleKey").textContent = keyVisible ? "🙈 隐藏" : "👁️ 显示";
+    });
+
+    // 拉取模型列表
+    $("#btnFetchModels").addEventListener("click", function () {
+      var btn = $("#btnFetchModels");
+      NS.config.save(collectCfgPatch());
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> 拉取中…';
+
+      NS.ai.listModels().then(function (list) {
+        cfgFetchedModels = list;
+        renderModelChips();
+        toast("已拉取 " + list.length + " 个模型", "ok");
+      }).catch(function (e) {
+        toast("拉取失败：" + e.message, "err");
+      }).then(function () {
+        btn.disabled = false;
+        btn.textContent = "🔄 从服务端拉取模型列表";
+      });
+    });
 
     $("#btnSaveConfig").addEventListener("click", function () {
-      NS.config.save({
-        baseUrl: $("#cfgBaseUrl").value.trim(),
-        apiKey: $("#cfgApiKey").value.trim(),
-        model: $("#cfgModel").value.trim(),
-        temperature: parseFloat($("#cfgTemp").value) || 0.85,
-        platform: $("#cfgPlatform").value
-      });
+      NS.config.save(collectCfgPatch());
       toast("设置已保存", "ok");
     });
 
     $("#btnTestConn").addEventListener("click", function () {
-      NS.config.save({
-        baseUrl: $("#cfgBaseUrl").value.trim(),
-        apiKey: $("#cfgApiKey").value.trim(),
-        model: $("#cfgModel").value.trim(),
-        temperature: parseFloat($("#cfgTemp").value) || 0.85,
-        platform: $("#cfgPlatform").value
-      });
+      NS.config.save(collectCfgPatch());
       var btn = $("#btnTestConn");
       btn.disabled = true;
       btn.innerHTML = '<span class="spinner"></span> 测试中…';
@@ -303,7 +714,7 @@
         toast("连接失败：" + e.message, "err");
       }).then(function () {
         btn.disabled = false;
-        btn.textContent = "测试连接";
+        btn.textContent = "🔌 测试连接";
       });
     });
   }
